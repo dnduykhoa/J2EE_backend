@@ -53,6 +53,12 @@ public class Category {
     @ToString.Exclude
     @JsonIgnore
     private List<Product> products = new ArrayList<>();
+
+    // EAV: Thuộc tính áp dụng cho danh mục này
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @JsonIgnore
+    private List<CategoryAttribute> categoryAttributes = new ArrayList<>();
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
