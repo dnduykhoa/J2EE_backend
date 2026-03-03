@@ -56,6 +56,9 @@ public class User implements UserDetails {
     @Column(name = "provider", length = 50)
     private String provider;
 
+    @Column(name = "provider_id", length = 255)
+    private String providerId;
+
     @ManyToMany(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(name = "user_role", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles = new HashSet<>();
