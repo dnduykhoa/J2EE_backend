@@ -1,0 +1,267 @@
+package j2ee_backend.nhom05.controller;
+
+import j2ee_backend.nhom05.dto.ApiResponse;
+import j2ee_backend.nhom05.model.Brand;
+import j2ee_backend.nhom05.model.Category;
+import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductMedia;
+import j2ee_backend.nhom05.repository.IBrandRepository;
+import j2ee_backend.nhom05.repository.ICategoryRepository;
+import j2ee_backend.nhom05.service.ProductService;
+import j2ee_backend.nhom05.service.ProductMediaService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import java.math.BigDecimal;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/products")
+@CrossOrigin(origins = "*")
+public class ProductController {
+    
+    @Autowired
+    private ProductService productService;
+    
+    @Autowired
+    private ProductMediaService productMediaService;
+    
+    @Autowired
+    private ICategoryRepository categoryRepository;
+    
+    @Autowired
+    private IBrandRepository brandRepository;
+    
+    // Lấy tất cả sản phẩm
+    @GetMapping("")
+    public ResponseEntity<?> getAllProducts() {
+        try {
+            List<Product> products = productService.getAllProducts();
+            return ResponseEntity.ok(new ApiResponse("Lấy danh sách sản phẩm thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Lấy sản phẩm theo ID
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getProductById(@PathVariable Long id) {
+        try {
+            Product product = productService.getProductById(id).orElse(null);
+            if (product == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse("Không tìm thấy sản phẩm", null));
+            }
+            return ResponseEntity.ok(new ApiResponse("Lấy thông tin sản phẩm thành công", product));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Thêm sản phẩm mới (với đầy đủ thông tin và media)
+    @PostMapping("/add")
+    public ResponseEntity<?> createProduct(
+            @RequestParam String name,
+            @RequestParam(required = false) String description,
+            @RequestParam BigDecimal price,
+            @RequestParam Integer stockQuantity,
+            @RequestParam Long categoryId,
+            @RequestParam Long brandId,
+            @RequestParam(defaultValue = "true") Boolean isActive,
+            @RequestParam(value = "files", required = false) MultipartFile[] files) {
+        try {
+            // Tạo sản phẩm mới
+            Product product = new Product();
+            product.setName(name);
+            product.setDescription(description);
+            product.setPrice(price);
+            product.setStockQuantity(stockQuantity);
+            product.setIsActive(isActive);
+            
+            // Set category
+            Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
+            product.setCategory(category);
+            
+            // Set brand
+            Brand brand = brandRepository.findById(brandId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu"));
+            product.setBrand(brand);
+            
+            // Lưu sản phẩm trước
+            Product newProduct = productService.createProduct(product);
+            
+            // Upload media nếu có
+            if (files != null && files.length > 0) {
+                productMediaService.uploadProductMedia(newProduct.getId(), files, true);
+            }
+            
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse("Thêm sản phẩm thành công", newProduct));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Cập nhật sản phẩm (với hoặc không có media)
+    @PutMapping("/update/{id}")
+    public ResponseEntity<?> updateProduct(
+            @PathVariable Long id,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) BigDecimal price,
+            @RequestParam(required = false) Integer stockQuantity,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(value = "files", required = false) MultipartFile[] files,
+            @RequestParam(value = "deleteMediaIds", required = false) List<Long> deleteMediaIds) {
+        try {
+            // Lấy sản phẩm hiện tại
+            Product existingProduct = productService.getProductById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
+            
+            // Cập nhật các trường được gửi lên (chỉ update field nào có giá trị)
+            if (name != null) {
+                existingProduct.setName(name);
+            }
+
+            if (description != null) {
+                existingProduct.setDescription(description);
+            }
+
+            if (price != null) { 
+                existingProduct.setPrice(price);
+            }
+
+            if (stockQuantity != null) {
+                existingProduct.setStockQuantity(stockQuantity);
+            }
+
+            if (isActive != null) {
+                existingProduct.setIsActive(isActive);
+            }
+            
+            if (categoryId != null) {
+                Category category = categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
+                existingProduct.setCategory(category);
+            }
+
+            if (brandId != null) {
+                Brand brand = brandRepository.findById(brandId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu"));
+                existingProduct.setBrand(brand);
+            }
+            
+            // Xóa media cũ nếu có danh sách deleteMediaIds
+            if (deleteMediaIds != null && !deleteMediaIds.isEmpty()) {
+                for (Long mediaId : deleteMediaIds) {
+                    productMediaService.deleteProductMedia(mediaId);
+                }
+            }
+            
+            // Upload media mới nếu có
+            if (files != null && files.length > 0) {
+                productMediaService.uploadProductMedia(id, files, false);
+            }
+            
+            // Lưu product
+            Product updatedProduct = productService.updateProduct(id, existingProduct);
+            
+            return ResponseEntity.ok(new ApiResponse("Cập nhật sản phẩm thành công", updatedProduct));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Xóa sản phẩm
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
+        try {
+            productService.deleteProduct(id);
+            return ResponseEntity.ok(new ApiResponse("Xóa sản phẩm thành công", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Tìm kiếm sản phẩm theo tên
+    @GetMapping("/search")
+    public ResponseEntity<?> searchProducts(@RequestParam String name) {
+        try {
+            List<Product> products = productService.searchProductsByName(name);
+            return ResponseEntity.ok(new ApiResponse("Tìm kiếm thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Lấy sản phẩm theo danh mục
+    @GetMapping("/category/{categoryId}")
+    public ResponseEntity<?> getProductsByCategory(@PathVariable Long categoryId) {
+        try {
+            List<Product> products = productService.getProductsByCategory(categoryId);
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo danh mục thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Lấy sản phẩm theo thương hiệu
+    @GetMapping("/brand/{brandId}")
+    public ResponseEntity<?> getProductsByBrand(@PathVariable Long brandId) {
+        try {
+            List<Product> products = productService.getProductsByBrand(brandId);
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo thương hiệu thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Lấy sản phẩm đang hoạt động
+    @GetMapping("/active")
+    public ResponseEntity<?> getActiveProducts() {
+        try {
+            List<Product> products = productService.getActiveProducts();
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm đang hoạt động thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Lấy sản phẩm theo khoảng giá
+    @GetMapping("/price-range")
+    public ResponseEntity<?> getProductsByPriceRange(@RequestParam BigDecimal min, @RequestParam BigDecimal max) {
+        try {
+            List<Product> products = productService.getProductsByPriceRange(min, max);
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo khoảng giá thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+    
+    // Lấy tất cả media của sản phẩm
+    @GetMapping("/{productId}/media")
+    public ResponseEntity<?> getProductMedia(@PathVariable Long productId) {
+        try {
+            List<ProductMedia> mediaList = productMediaService.getProductMedia(productId);
+            return ResponseEntity.ok(new ApiResponse("Lấy media thành công", mediaList));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+}
