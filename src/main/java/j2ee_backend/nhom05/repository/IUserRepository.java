@@ -3,6 +3,7 @@ package j2ee_backend.nhom05.repository;
 import j2ee_backend.nhom05.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -19,4 +20,8 @@ public interface IUserRepository extends JpaRepository<User, Long> {
     
     // Kiểm tra email đã tồn tại
     boolean existsByEmail(String email);
+
+    // Tìm kiếm user theo username, email hoặc fullName
+    List<User> findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
+        String username, String email, String fullName);
 }

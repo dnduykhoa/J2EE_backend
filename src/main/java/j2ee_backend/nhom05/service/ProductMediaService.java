@@ -103,4 +103,26 @@ public class ProductMediaService {
         // Xóa tất cả record trong DB
         productMediaRepository.deleteByProductId(productId);
     }
+
+    /**
+     * Đặt một media làm ảnh chính (isPrimary = true).
+     * Tự động bỏ chọn primary của các media khác cùng sản phẩm.
+     */
+    @Transactional
+    public ProductMedia setPrimaryMedia(Long productId, Long mediaId) {
+        ProductMedia target = productMediaRepository.findById(mediaId)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy media với ID: " + mediaId));
+        if (!target.getProduct().getId().equals(productId)) {
+            throw new RuntimeException("Media không thuộc sản phẩm này");
+        }
+        // Bỏ primary tất cả media cùng sản phẩm
+        List<ProductMedia> all = productMediaRepository.findByProductId(productId);
+        for (ProductMedia m : all) {
+            m.setIsPrimary(false);
+        }
+        productMediaRepository.saveAll(all);
+        // Đặt target làm primary
+        target.setIsPrimary(true);
+        return productMediaRepository.save(target);
+    }
 }

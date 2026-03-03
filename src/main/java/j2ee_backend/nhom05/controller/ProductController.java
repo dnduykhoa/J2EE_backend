@@ -264,4 +264,44 @@ public class ProductController {
                 .body(new ApiResponse(e.getMessage(), null));
         }
     }
+
+    // Xóa một media theo ID
+    @DeleteMapping("/{productId}/media/{mediaId}")
+    public ResponseEntity<?> deleteMedia(@PathVariable Long productId, @PathVariable Long mediaId) {
+        try {
+            productMediaService.deleteProductMedia(mediaId);
+            return ResponseEntity.ok(new ApiResponse("Xóa media thành công", null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Đặt một media làm ảnh chính
+    @PutMapping("/{productId}/media/{mediaId}/set-primary")
+    public ResponseEntity<?> setPrimaryMedia(@PathVariable Long productId, @PathVariable Long mediaId) {
+        try {
+            ProductMedia media = productMediaService.setPrimaryMedia(productId, mediaId);
+            return ResponseEntity.ok(new ApiResponse("Đặt ảnh chính thành công", media));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Bật/tắt trạng thái hoạt động của sản phẩm
+    @PatchMapping("/{id}/toggle-active")
+    public ResponseEntity<?> toggleActive(@PathVariable Long id) {
+        try {
+            Product product = productService.getProductById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
+            product.setIsActive(!Boolean.TRUE.equals(product.getIsActive()));
+            Product updated = productService.updateProduct(id, product);
+            String status = Boolean.TRUE.equals(updated.getIsActive()) ? "kích hoạt" : "vô hiệu hóa";
+            return ResponseEntity.ok(new ApiResponse("Đã " + status + " sản phẩm", updated));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
 }

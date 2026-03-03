@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -152,5 +153,42 @@ public class UserService {
         // Cập nhật mật khẩu mới
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+    }
+
+    // -----------------------------------------------------------------------
+    // Admin APIs
+    // -----------------------------------------------------------------------
+
+    /** Lấy danh sách tất cả user. */
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+
+    /** Tìm kiếm user theo username, email hoặc họ tên. */
+    public List<User> searchUsers(String keyword) {
+        return userRepository
+            .findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
+                keyword, keyword, keyword);
+    }
+
+    /** Xóa user theo ID (admin). */
+    @Transactional
+    public void deleteUser(Long id) {
+        User user = findById(id);
+        userRepository.delete(user);
+    }
+
+    /** Cập nhật danh sách role cho user (admin). */
+    @Transactional
+    public User updateUserRoles(Long id, Set<String> roleNames) {
+        User user = findById(id);
+        Set<Role> roles = new HashSet<>();
+        for (String roleName : roleNames) {
+            Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy role: " + roleName));
+            roles.add(role);
+        }
+        user.setRoles(roles);
+        return userRepository.save(user);
     }
 }
