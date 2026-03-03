@@ -19,4 +19,7 @@ public interface IUserRepository extends JpaRepository<User, Long> {
     
     // Kiểm tra email đã tồn tại
     boolean existsByEmail(String email);
+
+    // Tìm user theo provider và providerId (dùng cho Google login)
+    Optional<User> findByProviderAndProviderId(String provider, String providerId);
 }
