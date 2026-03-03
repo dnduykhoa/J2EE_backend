@@ -2,6 +2,7 @@ package j2ee_backend.nhom05.controller;
 
 import j2ee_backend.nhom05.dto.ApiResponse;
 import j2ee_backend.nhom05.dto.auth.ChangePasswordRequest;
+import j2ee_backend.nhom05.dto.auth.GoogleLoginRequest;
 import j2ee_backend.nhom05.dto.auth.LoginRequest;
 import j2ee_backend.nhom05.dto.auth.LoginResponse;
 import j2ee_backend.nhom05.dto.auth.RegisterRequest;
@@ -98,6 +99,30 @@ public class UserController {
         }
     }
     
+    // API đăng nhập bằng Google
+    @PostMapping("/google")
+    public ResponseEntity<?> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+        try {
+            User user = userService.loginWithGoogle(request.getIdToken());
+
+            LoginResponse response = new LoginResponse(
+                "Đăng nhập Google thành công",
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getPhone(),
+                user.getBirthDate(),
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+            );
+
+            return ResponseEntity.ok(new ApiResponse("Đăng nhập Google thành công", response));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
     // API lấy profile theo ID
     @GetMapping("/profile/{id}")
     public ResponseEntity<?> getProfile(@PathVariable Long id) {

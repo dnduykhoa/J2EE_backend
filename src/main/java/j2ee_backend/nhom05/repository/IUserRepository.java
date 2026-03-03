@@ -24,4 +24,7 @@ public interface IUserRepository extends JpaRepository<User, Long> {
     // Tìm kiếm user theo username, email hoặc fullName
     List<User> findByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(
         String username, String email, String fullName);
+
+    // Tìm user theo provider và providerId (dùng cho Google login)
+    Optional<User> findByProviderAndProviderId(String provider, String providerId);
 }
