@@ -1,14 +1,29 @@
 package j2ee_backend.nhom05.model;
 
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import j2ee_backend.nhom05.config.DataTypeConverter;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Định nghĩa thuộc tính - EAV: phần "Attribute" được chuẩn hóa
@@ -35,7 +50,7 @@ public class AttributeDefinition {
     @NotBlank(message = "Khóa thuộc tính không được để trống")
     private String attrKey; // VD: "ram", "cpu", "screen_size" — dùng làm specKey chuẩn hóa
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = DataTypeConverter.class)
     @Column(name = "data_type", nullable = false, length = 20)
     private DataType dataType = DataType.STRING; // STRING | NUMBER | BOOLEAN | LIST
 
