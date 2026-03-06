@@ -1,21 +1,29 @@
 package j2ee_backend.nhom05.service;
 
-import j2ee_backend.nhom05.model.Product;
-import j2ee_backend.nhom05.model.ProductMedia;
-import j2ee_backend.nhom05.model.ProductSpecification;
-import j2ee_backend.nhom05.repository.IProductRepository;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
+
+import j2ee_backend.nhom05.model.Category;
+import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductMedia;
+import j2ee_backend.nhom05.model.ProductSpecification;
+import j2ee_backend.nhom05.repository.ICategoryRepository;
+import j2ee_backend.nhom05.repository.IProductRepository;
 
 @Service
 public class ProductService {
     
     @Autowired
     private IProductRepository productRepository;
+
+    @Autowired
+    private ICategoryRepository categoryRepository;
     
     @Autowired
     private ProductMediaService productMediaService;
@@ -128,5 +136,22 @@ public class ProductService {
     // Lấy sản phẩm theo khoảng giá
     public List<Product> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
         return productRepository.findByPriceBetween(minPrice, maxPrice);
+    }
+
+    // Lấy sản phẩm theo danh sách nhiều categoryId
+    public List<Product> getProductsByCategories(List<Long> categoryIds) {
+        return productRepository.findByCategoryIdIn(categoryIds);
+    }
+
+    // Lấy sản phẩm theo danh mục và tất cả danh mục con của nó
+    public List<Product> getProductsByCategoryTree(Long categoryId) {
+        List<Long> ids = new ArrayList<>();
+        ids.add(categoryId);
+        // Lấy tất cả danh mục con trực tiếp
+        List<Category> children = categoryRepository.findByParentId(categoryId);
+        for (Category child : children) {
+            ids.add(child.getId());
+        }
+        return productRepository.findByCategoryIdIn(ids);
     }
 }

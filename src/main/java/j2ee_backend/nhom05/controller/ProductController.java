@@ -1,5 +1,23 @@
 package j2ee_backend.nhom05.controller;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
 import j2ee_backend.nhom05.dto.ApiResponse;
 import j2ee_backend.nhom05.model.Brand;
 import j2ee_backend.nhom05.model.Category;
@@ -7,15 +25,8 @@ import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductMedia;
 import j2ee_backend.nhom05.repository.IBrandRepository;
 import j2ee_backend.nhom05.repository.ICategoryRepository;
-import j2ee_backend.nhom05.service.ProductService;
 import j2ee_backend.nhom05.service.ProductMediaService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import java.math.BigDecimal;
-import java.util.List;
+import j2ee_backend.nhom05.service.ProductService;
 
 @RestController
 @RequestMapping("/api/products")
@@ -211,6 +222,30 @@ public class ProductController {
         try {
             List<Product> products = productService.getProductsByCategory(categoryId);
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo danh mục thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Lấy sản phẩm theo nhiều categoryId (dùng cho multi-select danh mục con)
+    @GetMapping("/categories")
+    public ResponseEntity<?> getProductsByCategories(@RequestParam List<Long> ids) {
+        try {
+            List<Product> products = productService.getProductsByCategories(ids);
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo nhiều danh mục thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Lấy sản phẩm theo danh mục cha và tất cả danh mục con
+    @GetMapping("/category/{categoryId}/with-children")
+    public ResponseEntity<?> getProductsByCategoryTree(@PathVariable Long categoryId) {
+        try {
+            List<Product> products = productService.getProductsByCategoryTree(categoryId);
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo cây danh mục thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse(e.getMessage(), null));
