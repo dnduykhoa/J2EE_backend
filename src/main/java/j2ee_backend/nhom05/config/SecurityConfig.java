@@ -31,6 +31,7 @@ public class SecurityConfig {
                     "/api/attribute-groups/**",
                     "/api/attribute-definitions/**",
                     "/api/category-attributes/**",
+                    "/api/cart/**",
                     "/images/**"
                 ).permitAll()
                 .anyRequest().authenticated()
