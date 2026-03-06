@@ -1,9 +1,11 @@
 package j2ee_backend.nhom05.repository;
 
-import j2ee_backend.nhom05.model.Product;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import java.util.List;
+
+import j2ee_backend.nhom05.model.Product;
 
 @Repository
 public interface IProductRepository extends JpaRepository<Product, Long> {
@@ -23,6 +25,9 @@ public interface IProductRepository extends JpaRepository<Product, Long> {
     // Tìm sản phẩm theo thương hiệu
     List<Product> findByBrandId(Long brandId);
     
+    // Tìm sản phẩm theo danh sách categoryId (dùng cho lọc theo cây danh mục)
+    List<Product> findByCategoryIdIn(List<Long> categoryIds);
+
     // Tìm sản phẩm đang hoạt động
     List<Product> findByIsActiveTrue();
     
