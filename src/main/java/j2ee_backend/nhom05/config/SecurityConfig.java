@@ -30,7 +30,8 @@ public class SecurityConfig {
                     "/api/brands/**",
                     "/api/attribute-groups/**",
                     "/api/attribute-definitions/**",
-                    "/api/category-attributes/**"
+                    "/api/category-attributes/**",
+                    "/images/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             );
