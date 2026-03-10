@@ -10,4 +10,8 @@ import java.util.List;
 public interface IProductMediaRepository extends JpaRepository<ProductMedia, Long> {
     List<ProductMedia> findByProductId(Long productId);
     void deleteByProductId(Long productId);
+
+    // Lấy displayOrder lớn nhất của sản phẩm (để tiếp tục đánh số)
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(MAX(m.displayOrder), -1) FROM ProductMedia m WHERE m.product.id = :productId")
+    int findMaxDisplayOrderByProductId(Long productId);
 }

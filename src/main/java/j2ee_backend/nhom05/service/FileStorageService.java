@@ -34,8 +34,9 @@ public class FileStorageService {
      * @return Đường dẫn file đã upload (vd: "products/uuid-filename.jpg")
      */
     public String storeFile(MultipartFile file, String subDir) {
-        // Chuẩn hóa tên file
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+        String rawName = file.getOriginalFilename();
+        // Chuẩn hóa tên file (xử lý null an toàn)
+        String originalFileName = (rawName != null) ? StringUtils.cleanPath(rawName) : "";
         
         try {
             // Kiểm tra tên file có ký tự không hợp lệ không
