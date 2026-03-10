@@ -106,14 +106,18 @@ public class ProductController {
             
             // Lưu sản phẩm trước
             Product newProduct = productService.createProduct(product);
-            
+
             // Upload media nếu có
             if (files != null && files.length > 0) {
                 productMediaService.uploadProductMedia(newProduct.getId(), files, true);
             }
-            
+
+            // Tải lại product từ DB để response bao gồm media vừa upload
+            Product savedProduct = productService.getProductById(newProduct.getId())
+                .orElse(newProduct);
+
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse("Thêm sản phẩm thành công", newProduct));
+                .body(new ApiResponse("Thêm sản phẩm thành công", savedProduct));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse(e.getMessage(), null));

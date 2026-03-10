@@ -33,10 +33,20 @@ public class ProductMediaService {
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
         
         List<ProductMedia> uploadedMedia = new ArrayList<>();
-        
+
+        // Lấy displayOrder tiếp theo từ media hiện có
+        int nextOrder = productMediaRepository.findMaxDisplayOrderByProductId(productId) + 1;
+        // Kiểm tra sản phẩm đã có primary image chưa
+        boolean alreadyHasPrimary = productMediaRepository.findByProductId(productId)
+            .stream().anyMatch(m -> Boolean.TRUE.equals(m.getIsPrimary()));
+
         for (int i = 0; i < files.length; i++) {
             MultipartFile file = files[i];
-            
+
+            if (file == null || file.isEmpty()) {
+                continue; // Bỏ qua file rỗng
+            }
+
             // Xác định loại media
             String mediaType;
             if (fileStorageService.isImageFile(file)) {
@@ -44,20 +54,21 @@ public class ProductMediaService {
             } else if (fileStorageService.isVideoFile(file)) {
                 mediaType = "VIDEO";
             } else {
-                throw new RuntimeException("File không hợp lệ. Chỉ chấp nhận hình ảnh hoặc video");
+                throw new RuntimeException("File '" + file.getOriginalFilename() + "' không hợp lệ. Chỉ chấp nhận hình ảnh hoặc video");
             }
-            
+
             // Upload file và lấy đường dẫn
             String filePath = fileStorageService.storeFile(file, "products");
-            
+
             // Tạo ProductMedia
             ProductMedia media = new ProductMedia();
             media.setProduct(product);
             media.setMediaUrl("/images/" + filePath);
             media.setMediaType(mediaType);
-            media.setIsPrimary(isPrimary && i == 0); // Chỉ file đầu tiên được set làm primary
-            media.setDisplayOrder(i);
-            
+            // Chỉ file đầu tiên của lô này được set primary nếu chưa có primary
+            media.setIsPrimary(isPrimary && i == 0 && !alreadyHasPrimary);
+            media.setDisplayOrder(nextOrder + i);
+
             uploadedMedia.add(productMediaRepository.save(media));
         }
         
