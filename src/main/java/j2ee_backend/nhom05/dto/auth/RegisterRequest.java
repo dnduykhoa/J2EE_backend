@@ -25,6 +25,7 @@ public class RegisterRequest {
     
     private String fullName;
     
+    @NotBlank(message = "Số điện thoại không được để trống")
     @Pattern(regexp = "^[0-9]{10,11}$", message = "Số điện thoại không hợp lệ")
     private String phone;
     
