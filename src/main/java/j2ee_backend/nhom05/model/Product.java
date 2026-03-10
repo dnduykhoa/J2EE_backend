@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Data
 @AllArgsConstructor
@@ -62,8 +63,14 @@ public class Product {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "is_active")
-    private Boolean isActive = true;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    private ProductStatus status = ProductStatus.ACTIVE;
+
+    @JsonProperty("isActive")
+    public boolean getIsActive() {
+        return this.status == ProductStatus.ACTIVE;
+    }
 
     @PrePersist
     protected void onCreate() {

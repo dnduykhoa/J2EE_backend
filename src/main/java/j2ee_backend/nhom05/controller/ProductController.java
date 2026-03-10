@@ -23,6 +23,7 @@ import j2ee_backend.nhom05.model.Brand;
 import j2ee_backend.nhom05.model.Category;
 import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductMedia;
+import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.repository.IBrandRepository;
 import j2ee_backend.nhom05.repository.ICategoryRepository;
 import j2ee_backend.nhom05.service.ProductMediaService;
@@ -82,7 +83,7 @@ public class ProductController {
             @RequestParam Integer stockQuantity,
             @RequestParam Long categoryId,
             @RequestParam Long brandId,
-            @RequestParam(defaultValue = "true") Boolean isActive,
+            @RequestParam(defaultValue = "ACTIVE") ProductStatus status,
             @RequestParam(value = "files", required = false) MultipartFile[] files) {
         try {
             // Tạo sản phẩm mới
@@ -91,7 +92,7 @@ public class ProductController {
             product.setDescription(description);
             product.setPrice(price);
             product.setStockQuantity(stockQuantity);
-            product.setIsActive(isActive);
+            product.setStatus(status);
             
             // Set category
             Category category = categoryRepository.findById(categoryId)
@@ -129,7 +130,7 @@ public class ProductController {
             @RequestParam(required = false) Integer stockQuantity,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Long brandId,
-            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) ProductStatus status,
             @RequestParam(value = "files", required = false) MultipartFile[] files,
             @RequestParam(value = "deleteMediaIds", required = false) List<Long> deleteMediaIds) {
         try {
@@ -154,8 +155,8 @@ public class ProductController {
                 existingProduct.setStockQuantity(stockQuantity);
             }
 
-            if (isActive != null) {
-                existingProduct.setIsActive(isActive);
+            if (status != null) {
+                existingProduct.setStatus(status);
             }
             
             if (categoryId != null) {
@@ -192,12 +193,12 @@ public class ProductController {
         }
     }
     
-    // Xóa sản phẩm
+    // Ngưng bán sản phẩm (xóa mềm - chuyển isActive = false)
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
         try {
-            productService.deleteProduct(id);
-            return ResponseEntity.ok(new ApiResponse("Xóa sản phẩm thành công", null));
+            Product product = productService.deleteProduct(id);
+            return ResponseEntity.ok(new ApiResponse("Đã ngưng bán sản phẩm", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse(e.getMessage(), null));
@@ -264,12 +265,36 @@ public class ProductController {
         }
     }
     
-    // Lấy sản phẩm đang hoạt động
+    // Lấy sản phẩm đang hoạt động (status = ACTIVE)
     @GetMapping("/active")
     public ResponseEntity<?> getActiveProducts() {
         try {
             List<Product> products = productService.getActiveProducts();
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm đang hoạt động thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Lấy sản phẩm hết hàng (status = OUT_OF_STOCK)
+    @GetMapping("/out-of-stock")
+    public ResponseEntity<?> getOutOfStockProducts() {
+        try {
+            List<Product> products = productService.getOutOfStockProducts();
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm hết hàng thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Lấy sản phẩm ngưng bán (status = INACTIVE)
+    @GetMapping("/inactive")
+    public ResponseEntity<?> getInactiveProducts() {
+        try {
+            List<Product> products = productService.getInactiveProducts();
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm ngưng bán thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse(e.getMessage(), null));
@@ -324,16 +349,43 @@ public class ProductController {
         }
     }
 
-    // Bật/tắt trạng thái hoạt động của sản phẩm
+    // Bật/tắt trạng thái hoạt động của sản phẩm (ACTIVE <-> INACTIVE)
     @PatchMapping("/{id}/toggle-active")
     public ResponseEntity<?> toggleActive(@PathVariable Long id) {
         try {
             Product product = productService.getProductById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
-            product.setIsActive(!Boolean.TRUE.equals(product.getIsActive()));
+            ProductStatus newStatus = product.getStatus() == ProductStatus.ACTIVE
+                ? ProductStatus.INACTIVE
+                : ProductStatus.ACTIVE;
+            product.setStatus(newStatus);
             Product updated = productService.updateProduct(id, product);
-            String status = Boolean.TRUE.equals(updated.getIsActive()) ? "kích hoạt" : "vô hiệu hóa";
-            return ResponseEntity.ok(new ApiResponse("Đã " + status + " sản phẩm", updated));
+            String statusLabel = updated.getStatus() == ProductStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
+            return ResponseEntity.ok(new ApiResponse("Đã " + statusLabel + " sản phẩm", updated));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Đánh dấu hết hàng (status = OUT_OF_STOCK)
+    @PatchMapping("/{id}/out-of-stock")
+    public ResponseEntity<?> markOutOfStock(@PathVariable Long id) {
+        try {
+            Product product = productService.markOutOfStock(id);
+            return ResponseEntity.ok(new ApiResponse("Đã đánh dấu sản phẩm hết hàng", product));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Kích hoạt lại sản phẩm (status = ACTIVE)
+    @PatchMapping("/{id}/restore")
+    public ResponseEntity<?> restoreProduct(@PathVariable Long id) {
+        try {
+            Product product = productService.restoreProduct(id);
+            return ResponseEntity.ok(new ApiResponse("Đã kích hoạt lại sản phẩm", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse(e.getMessage(), null));

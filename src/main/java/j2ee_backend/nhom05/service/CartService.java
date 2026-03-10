@@ -5,6 +5,7 @@ import j2ee_backend.nhom05.dto.CartResponse.CartItemResponse;
 import j2ee_backend.nhom05.model.Cart;
 import j2ee_backend.nhom05.model.CartItem;
 import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.repository.ICartItemRepository;
 import j2ee_backend.nhom05.repository.ICartRepository;
@@ -56,7 +57,7 @@ public class CartService {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + productId));
 
-        if (!Boolean.TRUE.equals(product.getIsActive())) {
+        if (product.getStatus() != ProductStatus.ACTIVE) {
             throw new RuntimeException("Sản phẩm không còn hoạt động");
         }
 
@@ -164,7 +165,7 @@ public class CartService {
 
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
-            if (!Boolean.TRUE.equals(product.getIsActive())) {
+            if (product.getStatus() != ProductStatus.ACTIVE) {
                 errors.add("Sản phẩm '" + product.getName() + "' hiện không còn bán");
             } else if (product.getStockQuantity() <= 0) {
                 errors.add("Sản phẩm '" + product.getName() + "' đã hết hàng");
@@ -187,7 +188,7 @@ public class CartService {
 
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
-            boolean inStock = Boolean.TRUE.equals(product.getIsActive()) && product.getStockQuantity() > 0;
+            boolean inStock = product.getStatus() == ProductStatus.ACTIVE && product.getStockQuantity() > 0;
             int availableStock = product.getStockQuantity();
 
             BigDecimal unitPrice = product.getPrice();

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductStatus;
 
 @Repository
 public interface IProductRepository extends JpaRepository<Product, Long> {
@@ -28,8 +29,8 @@ public interface IProductRepository extends JpaRepository<Product, Long> {
     // Tìm sản phẩm theo danh sách categoryId (dùng cho lọc theo cây danh mục)
     List<Product> findByCategoryIdIn(List<Long> categoryIds);
 
-    // Tìm sản phẩm đang hoạt động
-    List<Product> findByIsActiveTrue();
+    // Tìm sản phẩm theo trạng thái
+    List<Product> findByStatus(ProductStatus status);
     
     // Tìm sản phẩm theo khoảng giá
     List<Product> findByPriceBetween(java.math.BigDecimal minPrice, java.math.BigDecimal maxPrice);

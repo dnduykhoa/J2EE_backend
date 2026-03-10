@@ -13,6 +13,7 @@ import j2ee_backend.nhom05.model.Category;
 import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductMedia;
 import j2ee_backend.nhom05.model.ProductSpecification;
+import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.repository.ICategoryRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 
@@ -68,7 +69,7 @@ public class ProductService {
         product.setStockQuantity(productDetails.getStockQuantity());
         product.setCategory(productDetails.getCategory());
         product.setBrand(productDetails.getBrand());
-        product.setIsActive(productDetails.getIsActive());
+        product.setStatus(productDetails.getStatus());
         
         return productRepository.save(product);
     }
@@ -85,7 +86,7 @@ public class ProductService {
         product.setStockQuantity(productDetails.getStockQuantity());
         product.setCategory(productDetails.getCategory());
         product.setBrand(productDetails.getBrand());
-        product.setIsActive(productDetails.getIsActive());
+        product.setStatus(productDetails.getStatus());
         
         // Xử lý media nếu có files mới
         if (files != null && files.length > 0) {
@@ -101,16 +102,28 @@ public class ProductService {
         return productRepository.save(product);
     }
     
-    // Xóa sản phẩm
-    public void deleteProduct(Long id) {
+    // Ngưng bán sản phẩm (xóa mềm - chuyển status = INACTIVE)
+    public Product deleteProduct(Long id) {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
-        
-        // Xóa tất cả media (bao gồm cả file vật lý) trước khi xóa product
-        productMediaService.deleteAllProductMedia(id);
-        
-        // Xóa product
-        productRepository.delete(product);
+        product.setStatus(ProductStatus.INACTIVE);
+        return productRepository.save(product);
+    }
+
+    // Đánh dấu hết hàng (chuyển status = OUT_OF_STOCK)
+    public Product markOutOfStock(Long id) {
+        Product product = productRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+        product.setStatus(ProductStatus.OUT_OF_STOCK);
+        return productRepository.save(product);
+    }
+
+    // Kích hoạt lại sản phẩm (chuyển status = ACTIVE)
+    public Product restoreProduct(Long id) {
+        Product product = productRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+        product.setStatus(ProductStatus.ACTIVE);
+        return productRepository.save(product);
     }
     
     // Tìm kiếm sản phẩm theo tên
@@ -128,9 +141,19 @@ public class ProductService {
         return productRepository.findByBrandId(brandId);
     }
     
-    // Lấy sản phẩm đang hoạt động
+    // Lấy sản phẩm đang hoạt động (status = ACTIVE)
     public List<Product> getActiveProducts() {
-        return productRepository.findByIsActiveTrue();
+        return productRepository.findByStatus(ProductStatus.ACTIVE);
+    }
+
+    // Lấy sản phẩm hết hàng (status = OUT_OF_STOCK)
+    public List<Product> getOutOfStockProducts() {
+        return productRepository.findByStatus(ProductStatus.OUT_OF_STOCK);
+    }
+
+    // Lấy sản phẩm ngưng bán (status = INACTIVE)
+    public List<Product> getInactiveProducts() {
+        return productRepository.findByStatus(ProductStatus.INACTIVE);
     }
     
     // Lấy sản phẩm theo khoảng giá
