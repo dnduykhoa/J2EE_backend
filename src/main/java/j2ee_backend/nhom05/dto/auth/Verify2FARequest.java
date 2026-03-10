@@ -4,11 +4,11 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
-public class LoginRequest {
+public class Verify2FARequest {
     
     @NotBlank(message = "Email hoặc số điện thoại không được để trống")
     private String emailOrPhone;
     
-    @NotBlank(message = "Mật khẩu không được để trống")
-    private String password;
+    @NotBlank(message = "Mã xác thực không được để trống")
+    private String code;
 }
