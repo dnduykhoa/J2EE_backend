@@ -13,6 +13,7 @@ import j2ee_backend.nhom05.dto.auth.TwoFactorResponse;
 import j2ee_backend.nhom05.dto.auth.Verify2FARequest;
 import j2ee_backend.nhom05.model.Role;
 import j2ee_backend.nhom05.model.User;
+import j2ee_backend.nhom05.config.JwtUtil;
 import j2ee_backend.nhom05.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,9 @@ public class AuthController {
     
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
     
     // API kiểm tra username đã tồn tại
     @GetMapping("/check-username/{username}")
@@ -68,9 +72,10 @@ public class AuthController {
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
         try {
             User user = authService.register(request);
-            
+            String token = jwtUtil.generateToken(user.getUsername(), false);
             LoginResponse response = new LoginResponse(
                 "Đăng ký thành công",
+                token,
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -79,7 +84,6 @@ public class AuthController {
                 user.getBirthDate(),
                 user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
-            
             return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse("Đăng ký thành công", response));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -100,8 +104,10 @@ public class AuthController {
             
             // Nếu trả về User (không cần xác thực 2 bước)
             User user = (User) result;
+            String token = jwtUtil.generateToken(user.getUsername(), request.isRememberMe());
             LoginResponse response = new LoginResponse(
                 "Đăng nhập thành công",
+                token,
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -110,7 +116,6 @@ public class AuthController {
                 user.getBirthDate(),
                 user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
-            
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -124,8 +129,10 @@ public class AuthController {
         try {
             User user = authService.loginWithGoogle(request.getIdToken());
 
+            String token = jwtUtil.generateToken(user.getUsername(), false);
             LoginResponse response = new LoginResponse(
                 "Đăng nhập Google thành công",
+                token,
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -134,7 +141,6 @@ public class AuthController {
                 user.getBirthDate(),
                 user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
-
             return ResponseEntity.ok(new ApiResponse("Đăng nhập Google thành công", response));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -206,8 +212,10 @@ public class AuthController {
         try {
             User user = authService.verify2FACode(request.getEmailOrPhone(), request.getCode());
             
+            String token = jwtUtil.generateToken(user.getUsername(), false);
             LoginResponse response = new LoginResponse(
                 "Xác thực 2FA thành công",
+                token,
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -216,7 +224,6 @@ public class AuthController {
                 user.getBirthDate(),
                 user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
-            
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

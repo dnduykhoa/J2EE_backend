@@ -37,8 +37,7 @@ public class UserController {
                 user.getFullName(),
                 user.getPhone(),
                 user.getBirthDate(),
-                user.getProvider(),
-                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+                user.getProvider(),                user.isTwoFactorEnabled(),                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
             
             return ResponseEntity.ok(new ApiResponse("Lấy thông tin profile thành công", response));
@@ -61,8 +60,7 @@ public class UserController {
                 user.getFullName(),
                 user.getPhone(),
                 user.getBirthDate(),
-                user.getProvider(),
-                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+                user.getProvider(),                user.isTwoFactorEnabled(),                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
             
             return ResponseEntity.ok(new ApiResponse("Cập nhật profile thành công", response));
@@ -85,6 +83,7 @@ public class UserController {
                 .map(u -> new UserProfileResponse(
                     u.getId(), u.getUsername(), u.getEmail(), u.getFullName(),
                     u.getPhone(), u.getBirthDate(), u.getProvider(),
+                    u.isTwoFactorEnabled(),
                     u.getRoles().stream().map(Role::getName).collect(Collectors.toSet())))
                 .toList();
             return ResponseEntity.ok(new ApiResponse("Lấy danh sách user thành công", result));
@@ -103,6 +102,7 @@ public class UserController {
                 .map(u -> new UserProfileResponse(
                     u.getId(), u.getUsername(), u.getEmail(), u.getFullName(),
                     u.getPhone(), u.getBirthDate(), u.getProvider(),
+                    u.isTwoFactorEnabled(),
                     u.getRoles().stream().map(Role::getName).collect(Collectors.toSet())))
                 .toList();
             return ResponseEntity.ok(new ApiResponse("Tìm kiếm user thành công", result));
@@ -133,6 +133,7 @@ public class UserController {
             UserProfileResponse response = new UserProfileResponse(
                 user.getId(), user.getUsername(), user.getEmail(), user.getFullName(),
                 user.getPhone(), user.getBirthDate(), user.getProvider(),
+                user.isTwoFactorEnabled(),
                 user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
             return ResponseEntity.ok(new ApiResponse("Cập nhật role thành công", response));
         } catch (RuntimeException e) {
