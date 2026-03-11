@@ -77,8 +77,11 @@ public class AuthService {
             throw new RuntimeException("Thông tin đã được sử dụng, vui lòng điền lại thông tin");
         }
         
+        // Chuẩn hóa số điện thoại (xóa khoảng trắng)
+        String phone = request.getPhone().replaceAll("\\s+", "");
+        
         // Kiểm tra số điện thoại đã tồn tại
-        if (userRepository.findByPhone(request.getPhone()).isPresent()) {
+        if (userRepository.findByPhone(phone).isPresent()) {
             throw new RuntimeException("Thông tin đã được sử dụng, vui lòng điền lại thông tin");
         }
         
@@ -88,7 +91,7 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getPassword())); // Mã hóa password
         user.setEmail(request.getEmail());
         user.setFullName(request.getFullName());
-        user.setPhone(request.getPhone());
+        user.setPhone(phone);
         user.setBirthDate(request.getBirthDate());
         user.setProvider("local"); // Đăng ký thông thường
         
@@ -121,9 +124,19 @@ public class AuthService {
     
     // Login user - Trả về TwoFactorResponse nếu cần xác thực 2 bước
     public Object login(LoginRequest request) {
+        String input = request.getEmailOrPhone().trim();
+        
+        // Kiểm tra định dạng: phải là email hoặc số điện thoại
+        boolean isEmail = input.matches("^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,}$");
+        boolean isPhone = input.matches("^[0-9]{9,11}$");
+        
+        if (!isEmail && !isPhone) {
+            throw new RuntimeException("Vui lòng nhập đúng định dạng email hoặc số điện thoại");
+        }
+        
         // Tìm user theo email hoặc số điện thoại
-        User user = userRepository.findByEmail(request.getEmailOrPhone())
-            .orElseGet(() -> userRepository.findByPhone(request.getEmailOrPhone())
+        User user = userRepository.findByEmail(input)
+            .orElseGet(() -> userRepository.findByPhone(input)
                 .orElseThrow(() -> new RuntimeException("Email hoặc số điện thoại không tồn tại")));
 
         // Kiểm tra tài khoản Google không thể đăng nhập bằng mật khẩu
@@ -141,11 +154,11 @@ public class AuthService {
             String code = generateSixDigitCode();
             
             // Xóa các mã cũ
-            twoFactorCodeRepository.deleteByEmailOrPhone(request.getEmailOrPhone());
+            twoFactorCodeRepository.deleteByEmailOrPhone(input);
             
             // Lưu mã mới với thời gian hết hạn 5 phút
             TwoFactorCode twoFactorCode = new TwoFactorCode();
-            twoFactorCode.setEmailOrPhone(request.getEmailOrPhone());
+            twoFactorCode.setEmailOrPhone(input);
             twoFactorCode.setCode(code);
             twoFactorCode.setExpiryDate(LocalDateTime.now().plusMinutes(5));
             twoFactorCode.setUsed(false);
@@ -158,7 +171,7 @@ public class AuthService {
             return new TwoFactorResponse(
                 "Mã xác thực đã được gửi qua email",
                 true,
-                request.getEmailOrPhone()
+                input
             );
         }
         

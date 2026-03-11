@@ -17,5 +17,6 @@ public class UserProfileResponse {
     private String phone;
     private LocalDate birthDate;
     private String provider;
+    private boolean twoFactorEnabled;
     private Set<String> roles;
 }
