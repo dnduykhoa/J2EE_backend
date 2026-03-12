@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -49,18 +50,50 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/api/auth/**",
+                // Auth endpoints: public
+                .requestMatchers("/api/auth/**").permitAll()
+                // Static images: public
+                .requestMatchers("/images/**").permitAll()
+                // Cart: requires authentication
+                .requestMatchers("/api/cart/**").authenticated()
+                // READ (GET) endpoints: public
+                .requestMatchers(HttpMethod.GET,
                     "/api/products/**",
                     "/api/categories/**",
                     "/api/brands/**",
                     "/api/attribute-groups/**",
                     "/api/attribute-definitions/**",
-                    "/api/category-attributes/**",
-                    "/api/cart/**",
-                    "/images/**"
+                    "/api/category-attributes/**"
                 ).permitAll()
-                // /api/users/** yêu cầu xác thực JWT
+                // WRITE (POST/PUT/DELETE) endpoints: ADMIN only
+                .requestMatchers(HttpMethod.POST,
+                    "/api/products/**",
+                    "/api/categories/**",
+                    "/api/brands/**",
+                    "/api/attribute-groups/**",
+                    "/api/attribute-definitions/**",
+                    "/api/category-attributes/**"
+                ).hasAuthority("ADMIN")
+                .requestMatchers(HttpMethod.PUT,
+                    "/api/products/**",
+                    "/api/categories/**",
+                    "/api/brands/**",
+                    "/api/attribute-groups/**",
+                    "/api/attribute-definitions/**",
+                    "/api/category-attributes/**"
+                ).hasAuthority("ADMIN")
+                .requestMatchers(HttpMethod.DELETE,
+                    "/api/products/**",
+                    "/api/categories/**",
+                    "/api/brands/**",
+                    "/api/attribute-groups/**",
+                    "/api/attribute-definitions/**",
+                    "/api/category-attributes/**"
+                ).hasAuthority("ADMIN")
+                .requestMatchers(HttpMethod.PATCH,
+                    "/api/products/**"
+                ).hasAuthority("ADMIN")
+                // Users: requires authentication (admin check done per-endpoint)
                 .requestMatchers("/api/users", "/api/users/**").authenticated()
                 .anyRequest().authenticated()
             )
