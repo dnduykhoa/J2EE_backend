@@ -57,8 +57,6 @@ public class SecurityConfig {
                     "/api/attribute-groups/**",
                     "/api/attribute-definitions/**",
                     "/api/category-attributes/**",
-                    "/api/carousel",
-                    "/api/carousel/upload",
                     "/api/cart/**",
                     "/images/**"
                 ).permitAll()
@@ -67,7 +65,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex
-                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                               .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
