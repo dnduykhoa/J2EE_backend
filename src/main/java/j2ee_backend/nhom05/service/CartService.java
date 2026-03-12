@@ -1,5 +1,13 @@
 package j2ee_backend.nhom05.service;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import j2ee_backend.nhom05.dto.CartResponse;
 import j2ee_backend.nhom05.dto.CartResponse.CartItemResponse;
 import j2ee_backend.nhom05.model.Cart;
@@ -11,14 +19,6 @@ import j2ee_backend.nhom05.repository.ICartItemRepository;
 import j2ee_backend.nhom05.repository.ICartRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
 
 @Service
 public class CartService {
@@ -128,9 +128,10 @@ public class CartService {
             throw new RuntimeException("Không có quyền chỉnh sửa giỏ hàng này");
         }
 
-        cartItemRepository.delete(cartItem);
+        Cart cart = cartItem.getCart();
+        cart.getItems().removeIf(item -> item.getId().equals(cartItemId)); // safe by ID
+        cartRepository.save(cart); // orphanRemoval deletes from cart_items
 
-        Cart cart = getOrCreateCart(userId);
         return buildCartResponse(cart);
     }
 
@@ -139,8 +140,7 @@ public class CartService {
     public void clearCart(Long userId) {
         Cart cart = cartRepository.findByUserId(userId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy giỏ hàng"));
-        cart.getItems().clear();
-        cartRepository.save(cart);
+        cartRepository.delete(cart); // cascade CascadeType.ALL xóa cả cart_items
     }
 
     // Lấy thông tin giỏ hàng

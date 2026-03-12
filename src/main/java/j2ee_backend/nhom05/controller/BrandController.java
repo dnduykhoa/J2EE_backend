@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import jakarta.validation.Valid;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
@@ -58,11 +58,21 @@ public class BrandController {
         }
     }
     
-    // Thêm brand mới
+    // Thêm brand mới (multipart/form-data)
     @PostMapping("/add")
-    public ResponseEntity<?> createBrand(@Valid @RequestBody Brand brand) {
+    public ResponseEntity<?> createBrand(
+            @RequestParam("name") String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "displayOrder", defaultValue = "0") Integer displayOrder,
+            @RequestParam(value = "isActive", defaultValue = "true") Boolean isActive,
+            @RequestParam(value = "logo", required = false) MultipartFile logo) {
         try {
-            Brand newBrand = brandService.createBrand(brand);
+            Brand brand = new Brand();
+            brand.setName(name);
+            brand.setDescription(description);
+            brand.setDisplayOrder(displayOrder);
+            brand.setIsActive(isActive);
+            Brand newBrand = brandService.createBrand(brand, logo);
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse("Thêm thương hiệu thành công", newBrand));
         } catch (Exception e) {
@@ -71,11 +81,22 @@ public class BrandController {
         }
     }
     
-    // Cập nhật brand
+    // Cập nhật brand (multipart/form-data)
     @PutMapping("/update/{id}")
-    public ResponseEntity<?> updateBrand(@PathVariable Long id, @Valid @RequestBody Brand brandDetails) {
+    public ResponseEntity<?> updateBrand(
+            @PathVariable Long id,
+            @RequestParam("name") String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "displayOrder", defaultValue = "0") Integer displayOrder,
+            @RequestParam(value = "isActive", defaultValue = "true") Boolean isActive,
+            @RequestParam(value = "logo", required = false) MultipartFile logo) {
         try {
-            Brand updatedBrand = brandService.updateBrand(id, brandDetails);
+            Brand brandDetails = new Brand();
+            brandDetails.setName(name);
+            brandDetails.setDescription(description);
+            brandDetails.setDisplayOrder(displayOrder);
+            brandDetails.setIsActive(isActive);
+            Brand updatedBrand = brandService.updateBrand(id, brandDetails, logo);
             return ResponseEntity.ok(new ApiResponse("Cập nhật thương hiệu thành công", updatedBrand));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
