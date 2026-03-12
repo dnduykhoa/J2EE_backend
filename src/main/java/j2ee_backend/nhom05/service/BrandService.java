@@ -1,15 +1,21 @@
 package j2ee_backend.nhom05.service;
 
-import j2ee_backend.nhom05.model.Brand;
-import j2ee_backend.nhom05.repository.IBrandRepository;
-import j2ee_backend.nhom05.repository.IProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import j2ee_backend.nhom05.model.Brand;
+import j2ee_backend.nhom05.repository.IBrandRepository;
+import j2ee_backend.nhom05.repository.IProductRepository;
+
 @Service
 public class BrandService {
+
+    @Autowired
+    private FileStorageService fileStorageService;
     
     @Autowired
     private IBrandRepository brandRepository;
@@ -32,21 +38,39 @@ public class BrandService {
         return brandRepository.findByIsActiveTrue();
     }
     
-    // Tạo brand mới
-    public Brand createBrand(Brand brand) {
+    // Tạo brand mới (có thể kèm file logo)
+    public Brand createBrand(Brand brand, MultipartFile logoFile) {
+        if (logoFile != null && !logoFile.isEmpty()) {
+            if (!fileStorageService.isImageFile(logoFile)) {
+                throw new RuntimeException("File logo phải là hình ảnh (jpg, png, webp,...)");
+            }
+            String path = fileStorageService.storeFile(logoFile, "brands");
+            brand.setLogoUrl("/images/" + path);
+        }
         return brandRepository.save(brand);
     }
     
-    // Cập nhật brand
-    public Brand updateBrand(Long id, Brand brandDetails) {
+    // Cập nhật brand (có thể kèm file logo mới)
+    public Brand updateBrand(Long id, Brand brandDetails, MultipartFile logoFile) {
         Brand brand = brandRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu với ID: " + id));
         
         brand.setName(brandDetails.getName());
-        brand.setLogoUrl(brandDetails.getLogoUrl());
         brand.setDescription(brandDetails.getDescription());
         brand.setDisplayOrder(brandDetails.getDisplayOrder());
         brand.setIsActive(brandDetails.getIsActive());
+
+        if (logoFile != null && !logoFile.isEmpty()) {
+            if (!fileStorageService.isImageFile(logoFile)) {
+                throw new RuntimeException("File logo phải là hình ảnh (jpg, png, webp,...)");
+            }
+            // Xóa logo cũ nếu là file local
+            if (brand.getLogoUrl() != null && brand.getLogoUrl().startsWith("/images/")) {
+                fileStorageService.deleteFile(brand.getLogoUrl().substring("/images/".length()));
+            }
+            String path = fileStorageService.storeFile(logoFile, "brands");
+            brand.setLogoUrl("/images/" + path);
+        }
         
         return brandRepository.save(brand);
     }
@@ -60,6 +84,11 @@ public class BrandService {
         long productCount = productRepository.countByBrandId(id);
         if (productCount > 0) {
             throw new RuntimeException("Không thể xóa thương hiệu này vì còn " + productCount + " sản phẩm. Vui lòng chuyển hoặc xóa các sản phẩm trước.");
+        }
+
+        // Xóa file logo local
+        if (brand.getLogoUrl() != null && brand.getLogoUrl().startsWith("/images/")) {
+            fileStorageService.deleteFile(brand.getLogoUrl().substring("/images/".length()));
         }
         
         brandRepository.delete(brand);
