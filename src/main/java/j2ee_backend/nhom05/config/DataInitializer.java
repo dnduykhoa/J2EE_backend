@@ -41,8 +41,8 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) throws Exception {
         initializeRoles();
         // initializeAdminUser();
-        initializeAttributeGroups();
-        initializeAttributeDefinitions();
+        //initializeAttributeGroups();
+        //initializeAttributeDefinitions();
     }
     
     private void initializeRoles() {
