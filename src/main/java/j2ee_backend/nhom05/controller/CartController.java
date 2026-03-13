@@ -43,6 +43,7 @@ public class CartController {
             CartResponse cartResponse = cartService.addToCart(
                 userId,
                 request.getProductId(),
+                request.getVariantId(),
                 request.getQuantity()
             );
             return ResponseEntity.ok(new ApiResponse("Thêm vào giỏ hàng thành công", cartResponse));

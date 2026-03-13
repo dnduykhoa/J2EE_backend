@@ -1,12 +1,12 @@
 package j2ee_backend.nhom05.dto;
 
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
@@ -40,6 +40,9 @@ public class OrderResponse {
         private Long productId;
         private String productName;
         private String productImageUrl; // URL ảnh đại diện sản phẩm
+        private Long variantId;
+        private String variantSku;
+        private List<String> variantOptions;
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal subtotal;
