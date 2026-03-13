@@ -1,18 +1,31 @@
 package j2ee_backend.nhom05.service;
 
-import j2ee_backend.nhom05.dto.OrderRequest;
-import j2ee_backend.nhom05.dto.OrderResponse;
-import j2ee_backend.nhom05.dto.OrderResponse.OrderItemResponse;
-import j2ee_backend.nhom05.model.*;
-import j2ee_backend.nhom05.repository.*;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
+import j2ee_backend.nhom05.dto.OrderRequest;
+import j2ee_backend.nhom05.dto.OrderResponse;
+import j2ee_backend.nhom05.dto.OrderResponse.OrderItemResponse;
+import j2ee_backend.nhom05.model.Cart;
+import j2ee_backend.nhom05.model.CartItem;
+import j2ee_backend.nhom05.model.Order;
+import j2ee_backend.nhom05.model.OrderItem;
+import j2ee_backend.nhom05.model.OrderStatus;
+import j2ee_backend.nhom05.model.PaymentMethod;
+import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductStatus;
+import j2ee_backend.nhom05.model.ProductVariant;
+import j2ee_backend.nhom05.model.User;
+import j2ee_backend.nhom05.repository.ICartRepository;
+import j2ee_backend.nhom05.repository.IOrderRepository;
+import j2ee_backend.nhom05.repository.IProductRepository;
+import j2ee_backend.nhom05.repository.IUserRepository;
 
 @Service
 public class OrderService {
@@ -50,15 +63,30 @@ public class OrderService {
         // 3. Validate từng sản phẩm trong giỏ
         for (CartItem cartItem : cart.getItems()) {
             Product product = cartItem.getProduct();
+            ProductVariant variant = cartItem.getVariant();
             if (product.getStatus() != ProductStatus.ACTIVE) {
                 throw new RuntimeException("Sản phẩm '" + product.getName() + "' hiện không còn bán");
             }
-            if (product.getStockQuantity() <= 0) {
-                throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
-            }
-            if (cartItem.getQuantity() > product.getStockQuantity()) {
-                throw new RuntimeException("Sản phẩm '" + product.getName()
-                    + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
+
+            if (variant != null) {
+                if (!Boolean.TRUE.equals(variant.getIsActive())) {
+                    throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' hiện không còn bán");
+                }
+                if (variant.getStockQuantity() <= 0) {
+                    throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' đã hết hàng");
+                }
+                if (cartItem.getQuantity() > variant.getStockQuantity()) {
+                    throw new RuntimeException("Biến thể của sản phẩm '" + product.getName()
+                        + "' chỉ còn " + variant.getStockQuantity() + " sản phẩm trong kho");
+                }
+            } else {
+                if (product.getStockQuantity() <= 0) {
+                    throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
+                }
+                if (cartItem.getQuantity() > product.getStockQuantity()) {
+                    throw new RuntimeException("Sản phẩm '" + product.getName()
+                        + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
+                }
             }
         }
 
@@ -87,21 +115,27 @@ public class OrderService {
 
         for (CartItem cartItem : cart.getItems()) {
             Product product = cartItem.getProduct();
-            BigDecimal unitPrice = product.getPrice();
+            ProductVariant variant = cartItem.getVariant();
+            BigDecimal unitPrice = variant != null ? variant.getPrice() : product.getPrice();
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
             totalAmount = totalAmount.add(subtotal);
 
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProduct(product);
+            orderItem.setVariant(variant);
             orderItem.setQuantity(cartItem.getQuantity());
             orderItem.setUnitPrice(unitPrice);
             orderItem.setSubtotal(subtotal);
             orderItems.add(orderItem);
 
             // Trừ tồn kho
-            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-            productRepository.save(product);
+            if (variant != null) {
+                variant.setStockQuantity(variant.getStockQuantity() - cartItem.getQuantity());
+            } else {
+                product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+                productRepository.save(product);
+            }
         }
 
         order.setTotalAmount(totalAmount);
@@ -181,8 +215,13 @@ public class OrderService {
                 && currentStatus != OrderStatus.DELIVERED) {
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();
-                product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                productRepository.save(product);
+                ProductVariant variant = item.getVariant();
+                if (variant != null) {
+                    variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+                } else {
+                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                    productRepository.save(product);
+                }
             }
             order.setCancelledAt(java.time.LocalDateTime.now());
             if (order.getCancelReason() == null || order.getCancelReason().isBlank()) {
@@ -208,8 +247,13 @@ public class OrderService {
         // Hoàn lại tồn kho
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
-            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-            productRepository.save(product);
+            ProductVariant variant = item.getVariant();
+            if (variant != null) {
+                variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+            } else {
+                product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                productRepository.save(product);
+            }
         }
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelledAt(java.time.LocalDateTime.now());
@@ -241,8 +285,13 @@ public class OrderService {
             if (order.getStatus() == OrderStatus.PENDING) {
                 for (OrderItem item : order.getItems()) {
                     Product product = item.getProduct();
-                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                    productRepository.save(product);
+                    ProductVariant variant = item.getVariant();
+                    if (variant != null) {
+                        variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+                    } else {
+                        product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                        productRepository.save(product);
+                    }
                 }
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelledAt(java.time.LocalDateTime.now());
@@ -274,8 +323,13 @@ public class OrderService {
             if (order.getStatus() == OrderStatus.PENDING) {
                 for (OrderItem item : order.getItems()) {
                     Product product = item.getProduct();
-                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                    productRepository.save(product);
+                    ProductVariant variant = item.getVariant();
+                    if (variant != null) {
+                        variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+                    } else {
+                        product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+                        productRepository.save(product);
+                    }
                 }
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelledAt(java.time.LocalDateTime.now());
@@ -310,6 +364,16 @@ public class OrderService {
                 product.getId(),
                 product.getName(),
                 productImageUrl,
+                item.getVariant() != null ? item.getVariant().getId() : null,
+                item.getVariant() != null ? item.getVariant().getSku() : null,
+                item.getVariant() != null
+                    ? item.getVariant().getValues().stream()
+                        .map(v -> {
+                            String key = v.getAttributeDefinition() != null ? v.getAttributeDefinition().getName() : v.getAttrKey();
+                            return (key != null ? key : "") + ": " + v.getDisplayValue();
+                        })
+                        .collect(Collectors.toList())
+                    : null,
                 item.getQuantity(),
                 item.getUnitPrice(),
                 item.getSubtotal()

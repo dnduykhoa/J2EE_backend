@@ -3,6 +3,7 @@ package j2ee_backend.nhom05.service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,10 +15,12 @@ import j2ee_backend.nhom05.model.Cart;
 import j2ee_backend.nhom05.model.CartItem;
 import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductStatus;
+import j2ee_backend.nhom05.model.ProductVariant;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.repository.ICartItemRepository;
 import j2ee_backend.nhom05.repository.ICartRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
+import j2ee_backend.nhom05.repository.IProductVariantRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
 
 @Service
@@ -31,6 +34,9 @@ public class CartService {
 
     @Autowired
     private IProductRepository productRepository;
+
+    @Autowired
+    private IProductVariantRepository productVariantRepository;
 
     @Autowired
     private IUserRepository userRepository;
@@ -49,7 +55,7 @@ public class CartService {
 
     // Thêm sản phẩm vào giỏ hàng (nếu đã có thì tăng số lượng)
     @Transactional
-    public CartResponse addToCart(Long userId, Long productId, Integer quantity) {
+    public CartResponse addToCart(Long userId, Long productId, Long variantId, Integer quantity) {
         if (quantity == null || quantity <= 0) {
             throw new RuntimeException("Số lượng phải lớn hơn 0");
         }
@@ -61,7 +67,17 @@ public class CartService {
             throw new RuntimeException("Sản phẩm không còn hoạt động");
         }
 
-        if (product.getStockQuantity() <= 0) {
+        ProductVariant variant = null;
+        if (variantId != null) {
+            variant = productVariantRepository.findByIdAndProductId(variantId, productId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể phù hợp"));
+            if (!Boolean.TRUE.equals(variant.getIsActive())) {
+                throw new RuntimeException("Biến thể không còn hoạt động");
+            }
+        }
+
+        int availableStock = getAvailableStock(product, variant);
+        if (availableStock <= 0) {
             throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
         }
 
@@ -69,20 +85,21 @@ public class CartService {
 
         // Kiểm tra nếu sản phẩm đã có trong giỏ hàng
         CartItem cartItem = cartItemRepository
-            .findByCartIdAndProductId(cart.getId(), productId)
+            .findByCartAndProductAndVariant(cart.getId(), productId, variantId)
             .orElse(null);
 
         if (cartItem != null) {
             int newQuantity = cartItem.getQuantity() + quantity;
-            if (newQuantity > product.getStockQuantity()) {
-                newQuantity = product.getStockQuantity();
+            if (newQuantity > availableStock) {
+                newQuantity = availableStock;
             }
             cartItem.setQuantity(newQuantity);
         } else {
             cartItem = new CartItem();
             cartItem.setCart(cart);
             cartItem.setProduct(product);
-            int actualQuantity = Math.min(quantity, product.getStockQuantity());
+            cartItem.setVariant(variant);
+            int actualQuantity = Math.min(quantity, availableStock);
             cartItem.setQuantity(actualQuantity);
             cart.getItems().add(cartItem);
         }
@@ -106,7 +123,9 @@ public class CartService {
         }
 
         Product product = cartItem.getProduct();
-        int actualQuantity = Math.min(quantity, product.getStockQuantity());
+        ProductVariant variant = cartItem.getVariant();
+        int availableStock = getAvailableStock(product, variant);
+        int actualQuantity = Math.min(quantity, availableStock);
         if (actualQuantity <= 0) {
             throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
         }
@@ -165,8 +184,25 @@ public class CartService {
 
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
+            ProductVariant variant = item.getVariant();
             if (product.getStatus() != ProductStatus.ACTIVE) {
                 errors.add("Sản phẩm '" + product.getName() + "' hiện không còn bán");
+                continue;
+            }
+
+            if (variant != null) {
+                if (!Boolean.TRUE.equals(variant.getIsActive())) {
+                    errors.add("Biến thể của sản phẩm '" + product.getName() + "' hiện không còn bán");
+                    continue;
+                }
+                if (variant.getStockQuantity() <= 0) {
+                    errors.add("Biến thể của sản phẩm '" + product.getName() + "' đã hết hàng");
+                    continue;
+                }
+                if (item.getQuantity() > variant.getStockQuantity()) {
+                    errors.add("Biến thể của sản phẩm '" + product.getName() + "' chỉ còn "
+                        + variant.getStockQuantity() + " sản phẩm trong kho");
+                }
             } else if (product.getStockQuantity() <= 0) {
                 errors.add("Sản phẩm '" + product.getName() + "' đã hết hàng");
             } else if (item.getQuantity() > product.getStockQuantity()) {
@@ -188,16 +224,29 @@ public class CartService {
 
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
-            boolean inStock = product.getStatus() == ProductStatus.ACTIVE && product.getStockQuantity() > 0;
-            int availableStock = product.getStockQuantity();
+            ProductVariant variant = item.getVariant();
 
-            BigDecimal unitPrice = product.getPrice();
+            boolean inStock = product.getStatus() == ProductStatus.ACTIVE && getAvailableStock(product, variant) > 0;
+            int availableStock = getAvailableStock(product, variant);
+
+            BigDecimal unitPrice = variant != null ? variant.getPrice() : product.getPrice();
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
             totalAmount = totalAmount.add(subtotal);
+
+            List<String> variantOptions = variant == null ? null : variant.getValues().stream()
+                .map(v -> {
+                    String key = v.getAttributeDefinition() != null ? v.getAttributeDefinition().getName() : v.getAttrKey();
+                    String value = v.getDisplayValue();
+                    return (key != null ? key : "") + ": " + value;
+                })
+                .collect(Collectors.toList());
 
             itemResponses.add(new CartItemResponse(
                 item.getId(),
                 product,
+                variant != null ? variant.getId() : null,
+                variant != null ? variant.getSku() : null,
+                variantOptions,
                 item.getQuantity(),
                 unitPrice,
                 subtotal,
@@ -213,5 +262,14 @@ public class CartService {
             itemResponses.size(),
             totalAmount
         );
+    }
+
+    private int getAvailableStock(Product product, ProductVariant variant) {
+        if (variant != null) {
+            Integer stock = variant.getStockQuantity();
+            return stock == null ? 0 : stock;
+        }
+        Integer stock = product.getStockQuantity();
+        return stock == null ? 0 : stock;
     }
 }
