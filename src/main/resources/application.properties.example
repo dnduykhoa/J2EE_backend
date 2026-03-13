@@ -21,6 +21,8 @@ file.upload-dir=src/main/resources/static/images
 spring.servlet.multipart.enabled=true
 spring.servlet.multipart.max-file-size=10MB
 spring.servlet.multipart.max-request-size=10MB
+server.tomcat.max-part-count=200
+server.tomcat.max-swallow-size=50MB
 
 # Google OAuth2 (lay tu Google Cloud Console -> APIs & Services -> Credentials)
 google.client-id=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
@@ -34,3 +36,6 @@ spring.mail.password=llju afbq gcmd bsvb
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 spring.mail.properties.mail.smtp.starttls.required=true
+
+# Payment redirect configuration
+vnpay.frontend-url=http://localhost:3000
