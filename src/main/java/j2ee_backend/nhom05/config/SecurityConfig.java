@@ -54,18 +54,23 @@ public class SecurityConfig {
                     "/api/products/**",
                     "/api/categories/**",
                     "/api/brands/**",
+                    "/api/carousel/**",
+                    "/api/vnpay/**",
+                    "/api/momo/**",
                     "/api/attribute-groups/**",
                     "/api/attribute-definitions/**",
                     "/api/category-attributes/**",
                     "/api/cart/**",
                     "/images/**"
                 ).permitAll()
+                // /api/orders/** yêu cầu xác thực JWT
+                .requestMatchers("/api/orders", "/api/orders/**").authenticated()
                 // /api/users/** yêu cầu xác thực JWT
                 .requestMatchers("/api/users", "/api/users/**").authenticated()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex
-                               .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
