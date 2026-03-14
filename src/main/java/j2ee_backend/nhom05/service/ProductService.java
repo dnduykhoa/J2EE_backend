@@ -28,6 +28,9 @@ public class ProductService {
     
     @Autowired
     private ProductMediaService productMediaService;
+
+    @Autowired
+    private SseService sseService;
     
     // Lấy tất cả sản phẩm
     public List<Product> getAllProducts() {
@@ -62,7 +65,7 @@ public class ProductService {
     public Product updateProduct(Long id, Product productDetails) {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
-        
+
         product.setName(productDetails.getName());
         product.setDescription(productDetails.getDescription());
         product.setPrice(productDetails.getPrice());
@@ -70,8 +73,10 @@ public class ProductService {
         product.setCategory(productDetails.getCategory());
         product.setBrand(productDetails.getBrand());
         product.setStatus(productDetails.getStatus());
-        
-        return productRepository.save(product);
+
+        Product saved = productRepository.save(product);
+        sseService.broadcastProductUpdate(saved.getId(), saved.getStatus().name(), saved.getStockQuantity());
+        return saved;
     }
     
     // Cập nhật sản phẩm với media (thông tin + hình ảnh/video)
@@ -99,15 +104,19 @@ public class ProductService {
             productMediaService.uploadProductMedia(id, files, false);
         }
         
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        sseService.broadcastProductUpdate(saved.getId(), saved.getStatus().name(), saved.getStockQuantity());
+        return saved;
     }
-    
+
     // Ngưng bán sản phẩm (xóa mềm - chuyển status = INACTIVE)
     public Product deleteProduct(Long id) {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
         product.setStatus(ProductStatus.INACTIVE);
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        sseService.broadcastProductUpdate(saved.getId(), "INACTIVE", saved.getStockQuantity());
+        return saved;
     }
 
     // Đánh dấu hết hàng (chuyển status = OUT_OF_STOCK)
@@ -115,7 +124,9 @@ public class ProductService {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
         product.setStatus(ProductStatus.OUT_OF_STOCK);
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        sseService.broadcastProductUpdate(saved.getId(), "OUT_OF_STOCK", saved.getStockQuantity());
+        return saved;
     }
 
     // Kích hoạt lại sản phẩm (chuyển status = ACTIVE)
@@ -123,7 +134,9 @@ public class ProductService {
         Product product = productRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
         product.setStatus(ProductStatus.ACTIVE);
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        sseService.broadcastProductUpdate(saved.getId(), "ACTIVE", saved.getStockQuantity());
+        return saved;
     }
     
     // Tìm kiếm sản phẩm theo tên

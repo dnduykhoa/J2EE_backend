@@ -61,6 +61,7 @@ public class SecurityConfig {
                     "/api/attribute-definitions/**",
                     "/api/category-attributes/**",
                     "/api/cart/**",
+                    "/api/sse/**",
                     "/images/**"
                 ).permitAll()
                 // /api/orders/** yêu cầu xác thực JWT
