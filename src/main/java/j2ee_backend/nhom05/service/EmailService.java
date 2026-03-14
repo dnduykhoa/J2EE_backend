@@ -3,6 +3,7 @@ package j2ee_backend.nhom05.service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,8 +21,62 @@ public class EmailService {
     
     @Value("${spring.mail.username}")
     private String fromEmail;
-    
-    // Gửi email đặt lại mật khẩu với mã xác thực
+
+    // DTO nội bộ để truyền thông tin sản phẩm vào email
+    public static class EmailOrderItem {
+        public final String productName;
+        public final String variantInfo;  // ví dụ: "Màu: Đen, Size: XL"
+        public final String imageUrl;     // URL ảnh có thể truy cập từ internet
+        public final int quantity;
+        public final BigDecimal unitPrice;
+        public final BigDecimal subtotal;
+
+        public EmailOrderItem(String productName, String variantInfo, String imageUrl,
+                              int quantity, BigDecimal unitPrice, BigDecimal subtotal) {
+            this.productName = productName;
+            this.variantInfo = variantInfo;
+            this.imageUrl    = imageUrl;
+            this.quantity    = quantity;
+            this.unitPrice   = unitPrice;
+            this.subtotal    = subtotal;
+        }
+    }
+
+    // Tạo HTML bảng danh sách sản phẩm trong email
+    private String buildItemsTableHtml(List<EmailOrderItem> items) {
+        if (items == null || items.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        sb.append("<table style='width:100%; border-collapse:collapse; margin:16px 0;'>");
+        sb.append("<thead><tr style='background:#f1f5f9;'>");
+        sb.append("<th style='text-align:left; padding:10px 8px; font-size:12px; color:#475569; font-weight:600; border-bottom:1px solid #e2e8f0;'>Sản phẩm</th>");
+        sb.append("<th style='text-align:center; padding:10px 8px; font-size:12px; color:#475569; font-weight:600; border-bottom:1px solid #e2e8f0;'>Số lượng</th>");
+        sb.append("<th style='text-align:right; padding:10px 8px; font-size:12px; color:#475569; font-weight:600; border-bottom:1px solid #e2e8f0;'>Thành tiền</th>");
+        sb.append("</tr></thead><tbody>");
+        for (EmailOrderItem item : items) {
+            String imgTag = (item.imageUrl != null && !item.imageUrl.isBlank())
+                ? "<img src='" + item.imageUrl + "' alt='" + item.productName + "' "
+                    + "style='width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0; display:block;' />"
+                : "<div style='width:52px; height:52px; background:#f1f5f9; border-radius:6px; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; font-size:20px;'>📦</div>";
+            String variantHtml = (item.variantInfo != null && !item.variantInfo.isBlank())
+                ? "<p style='margin:2px 0 0 0; font-size:11px; color:#64748b;'>" + item.variantInfo + "</p>"
+                : "";
+            sb.append("<tr style='border-bottom:1px solid #f1f5f9;'>");
+            sb.append("<td style='padding:10px 8px; vertical-align:middle;'>");
+            sb.append("<div style='display:flex; align-items:center; gap:10px;'>");
+            sb.append(imgTag);
+            sb.append("<div>");
+            sb.append("<p style='margin:0; font-size:13px; font-weight:600; color:#1e293b;'>" + item.productName + "</p>");
+            sb.append(variantHtml);
+            sb.append("<p style='margin:2px 0 0 0; font-size:11px; color:#94a3b8;'>" + String.format("%,.0f", item.unitPrice) + " ₫ / cái</p>");
+            sb.append("</div></div></td>");
+            sb.append("<td style='padding:10px 8px; text-align:center; font-size:13px; color:#475569; vertical-align:middle;'>" + item.quantity + "</td>");
+                sb.append("<td style='padding:10px 8px; text-align:right; font-size:13px; font-weight:700; color:#222; vertical-align:middle;'>" + String.format("%,.0f", item.subtotal) + " ₫</td>");
+            sb.append("</tr>");
+        }
+        sb.append("</tbody></table>");
+        return sb.toString();
+    }
+
     public void sendPasswordResetEmail(String toEmail, String resetToken) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -202,7 +257,8 @@ public class EmailService {
             BigDecimal totalAmount,
             String shippingAddress,
             String phone,
-            String paymentMethod) {
+            String paymentMethod,
+            List<EmailOrderItem> items) {
         if (toEmail == null || toEmail.isBlank()) return;
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -219,23 +275,30 @@ public class EmailService {
 
             String htmlContent =
                 "<div style='font-family: Arial, sans-serif; background-color:#f4f6f8; padding:30px;'>"
-                + "<div style='max-width:600px; margin:auto; background:white; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);'>"
+                + "<div style='max-width:620px; margin:auto; background:white; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);'>"
                 + "<div style='background:#16a34a; color:white; padding:20px; text-align:center;'>"
                 + "<h2 style='margin:0;'>TechStore</h2>"
                 + "<p style='margin:4px 0 0 0; font-size:14px;'>Xác nhận đặt hàng thành công</p>"
                 + "</div>"
-                + "<div style='padding:30px;'>"
-                + "<p>Xin chào <b>" + customerName + "</b>,</p>"
-                + "<p>Cảm ơn bạn đã đặt hàng tại <b>TechStore</b>! Đơn hàng của bạn đã được ghi nhận.</p>"
-                + "<div style='background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:16px; margin:16px 0;'>"
-                + "<p style='margin:0 0 8px 0;'><b>Mã đơn hàng:</b> " + orderCode + "</p>"
-                + "<p style='margin:0 0 8px 0;'><b>Tổng tiền:</b> " + amountText + " ₫</p>"
-                + "<p style='margin:0 0 8px 0;'><b>Phương thức thanh toán:</b> " + paymentLabel + "</p>"
-                + "<p style='margin:0 0 8px 0;'><b>Địa chỉ giao hàng:</b> " + (shippingAddress != null ? shippingAddress : "") + "</p>"
+                + "<div style='padding:28px;'>"
+                + "<p style='margin:0 0 8px 0;'>Xin chào <b>" + customerName + "</b>,</p>"
+                + "<p style='margin:0 0 16px 0;'>Cảm ơn bạn đã đặt hàng tại <b>TechStore</b>! Đơn hàng của bạn đã được ghi nhận.</p>"
+                // Thông tin đơn hàng
+                + "<div style='background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px 16px; margin-bottom:16px;'>"
+                + "<p style='margin:0 0 6px 0;'><b>Mã đơn hàng:</b> " + orderCode + "</p>"
+                + "<p style='margin:0 0 6px 0;'><b>Phương thức thanh toán:</b> " + paymentLabel + "</p>"
+                + "<p style='margin:0 0 6px 0;'><b>Địa chỉ giao hàng:</b> " + (shippingAddress != null ? shippingAddress : "") + "</p>"
                 + "<p style='margin:0;'><b>Số điện thoại:</b> " + (phone != null ? phone : "") + "</p>"
                 + "</div>"
-                + "<p>Chúng tôi sẽ xử lý và giao hàng đến bạn trong thời gian sớm nhất.</p>"
-                + "<p style='margin-top:30px;'>Trân trọng,<br><b>TechStore Team</b></p>"
+                // Bảng sản phẩm
+                + "<p style='margin:0 0 4px 0; font-weight:600; color:#1e293b;'>Chi tiết đơn hàng</p>"
+                + buildItemsTableHtml(items)
+                // Tổng tiền
+                + "<div style='border-top:2px solid #e2e8f0; padding-top:12px; text-align:right;'>"
+                + "<p style='margin:0; font-size:15px;'>Tổng cộng: <b style='color:#e60012; font-size:17px;'>" + amountText + " ₫</b></p>"
+                + "</div>"
+                + "<p style='margin-top:20px;'>Chúng tôi sẽ xử lý và giao hàng đến bạn trong thời gian sớm nhất.</p>"
+                + "<p style='margin-top:24px;'>Trân trọng,<br><b>TechStore Team</b></p>"
                 + "</div>"
                 + "<div style='background:#f8fafc; padding:16px; text-align:center; font-size:12px; color:#64748b;'>"
                 + "© 2026 TechStore. All rights reserved."
@@ -256,7 +319,8 @@ public class EmailService {
             String fullName,
             String orderCode,
             BigDecimal totalAmount,
-            String cancelReason) {
+            String cancelReason,
+            List<EmailOrderItem> items) {
         if (toEmail == null || toEmail.isBlank()) return;
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -282,10 +346,11 @@ public class EmailService {
                 + "<p>Đơn hàng <b>#" + orderCode + "</b> của bạn đã được huỷ.</p>"
                 + "<div style='background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:16px; margin:16px 0;'>"
                 + "<p style='margin:0 0 8px 0;'><b>Mã đơn hàng:</b> " + orderCode + "</p>"
-                + "<p style='margin:0 0 8px 0;'><b>Tổng tiền đơn hàng:</b> " + amountText + " ₫</p>"
                 + "<p style='margin:0;'><b>Lý do huỷ:</b> " + reason + "</p>"
                 + "</div>"
-                + "<p>Nếu bạn có thắc mắc, vui lòng liên hệ với chúng tôi để được hỗ trợ.</p>"
+                + buildItemsTableHtml(items)
+                + "<p style='margin:0; font-size:15px;'>Tổng tiền đơn hàng: <b style='color:#222; font-size:17px;'>" + amountText + " ₫</b></p>"
+                + "<p style='margin-top:16px;'>Nếu bạn có thắc mắc, vui lòng liên hệ với chúng tôi để được hỗ trợ.</p>"
                 + "<p style='margin-top:30px;'>Trân trọng,<br><b>TechStore Team</b></p>"
                 + "</div>"
                 + "<div style='background:#f8fafc; padding:16px; text-align:center; font-size:12px; color:#64748b;'>"
@@ -298,6 +363,70 @@ public class EmailService {
             mailSender.send(message);
         } catch (Exception e) {
             throw new RuntimeException("Không thể gửi email huỷ đơn hàng: " + e.getMessage());
+        }
+    }
+
+    // Gửi email xác nhận thanh toán online thành công (VNPAY / MoMo)
+    public void sendPaymentConfirmedEmail(
+            String toEmail,
+            String fullName,
+            String orderCode,
+            BigDecimal totalAmount,
+            String shippingAddress,
+            String phone,
+            String paymentMethod,
+            List<EmailOrderItem> items) {
+        if (toEmail == null || toEmail.isBlank()) return;
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("TechStore - Thanh toán thành công #" + orderCode);
+
+            String amountText = totalAmount != null ? String.format("%,.0f", totalAmount) : "0";
+            String customerName = (fullName != null && !fullName.isBlank()) ? fullName : "bạn";
+            String paymentLabel = "VNPAY".equalsIgnoreCase(paymentMethod) ? "VNPay"
+                : "MOMO".equalsIgnoreCase(paymentMethod) ? "MoMo" : paymentMethod;
+
+            String htmlContent =
+                "<div style='font-family: Arial, sans-serif; background-color:#f4f6f8; padding:30px;'>"
+                + "<div style='max-width:620px; margin:auto; background:white; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);'>"
+                + "<div style='background:#16a34a; color:white; padding:20px; text-align:center;'>"
+                + "<h2 style='margin:0;'>TechStore</h2>"
+                + "<p style='margin:4px 0 0 0; font-size:14px;'>Xác nhận thanh toán thành công</p>"
+                + "</div>"
+                + "<div style='padding:28px;'>"
+                + "<p style='margin:0 0 8px 0;'>Xin chào <b>" + customerName + "</b>,</p>"
+                + "<p style='margin:0 0 16px 0;'>🎉 Thanh toán qua <b>" + paymentLabel + "</b> cho đơn hàng của bạn đã thành công!</p>"
+                // Thông tin đơn hàng
+                + "<div style='background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px 16px; margin-bottom:16px;'>"
+                + "<p style='margin:0 0 6px 0;'><b>Mã đơn hàng:</b> " + orderCode + "</p>"
+                + "<p style='margin:0 0 6px 0;'><b>Phương thức thanh toán:</b> " + paymentLabel + "</p>"
+                + "<p style='margin:0 0 6px 0;'><b>Địa chỉ giao hàng:</b> " + (shippingAddress != null ? shippingAddress : "") + "</p>"
+                + "<p style='margin:0;'><b>Số điện thoại:</b> " + (phone != null ? phone : "") + "</p>"
+                + "</div>"
+                // Bảng sản phẩm
+                + "<p style='margin:0 0 4px 0; font-weight:600; color:#1e293b;'>Chi tiết đơn hàng</p>"
+                + buildItemsTableHtml(items)
+                // Tổng tiền
+                + "<div style='border-top:2px solid #e2e8f0; padding-top:12px; text-align:right;'>"
+                + "<p style='margin:0; font-size:15px;'>Tổng đã thanh toán: <b style='color:#e60012; font-size:17px;'>" + amountText + " ₫</b></p>"
+                + "</div>"
+                + "<p style='margin-top:20px;'>Đơn hàng của bạn đang được xử lý và sẽ được giao trong thời gian sớm nhất.</p>"
+                + "<p style='margin-top:24px;'>Trân trọng,<br><b>TechStore Team</b></p>"
+                + "</div>"
+                + "<div style='background:#f8fafc; padding:16px; text-align:center; font-size:12px; color:#64748b;'>"
+                + "© 2026 TechStore. All rights reserved."
+                + "</div>"
+                + "</div>"
+                + "</div>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể gửi email xác nhận thanh toán: " + e.getMessage());
         }
     }
 

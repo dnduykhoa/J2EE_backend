@@ -77,6 +77,9 @@ public class Order {
     @Column(name = "payment_deadline")
     private LocalDateTime paymentDeadline;
 
+    @Column(name = "payment_retry_count")
+    private Integer paymentRetryCount = 0;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

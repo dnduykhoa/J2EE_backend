@@ -5,8 +5,11 @@ import j2ee_backend.nhom05.model.OrderStatus;
 import j2ee_backend.nhom05.model.PaymentMethod;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.QueryHint;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,6 +37,9 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
     long countByUserId(Long userId);
 
     // Tìm đơn có load luôn items (tránh N+1)
+    // @QueryHints passDistinctThrough=false: Hibernate dedup trong memory, không sinh SELECT DISTINCT SQL
+    // (SQL Server không hỗ trợ DISTINCT trên cột NVARCHAR(MAX) / ntext)
+    @QueryHints(value = @QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items oi LEFT JOIN FETCH oi.product WHERE o.id = :id")
     Optional<Order> findByIdWithItems(@Param("id") Long id);
 
