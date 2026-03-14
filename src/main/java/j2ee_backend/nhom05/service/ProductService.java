@@ -74,6 +74,13 @@ public class ProductService {
         product.setBrand(productDetails.getBrand());
         product.setStatus(productDetails.getStatus());
 
+        // Tự động đồng bộ trạng thái dựa trên tồn kho
+        if (product.getStockQuantity() > 0 && product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+            product.setStatus(ProductStatus.ACTIVE);
+        } else if (product.getStockQuantity() <= 0 && product.getStatus() == ProductStatus.ACTIVE) {
+            product.setStatus(ProductStatus.OUT_OF_STOCK);
+        }
+
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), saved.getStatus().name(), saved.getStockQuantity());
         return saved;
@@ -92,7 +99,14 @@ public class ProductService {
         product.setCategory(productDetails.getCategory());
         product.setBrand(productDetails.getBrand());
         product.setStatus(productDetails.getStatus());
-        
+
+        // Tự động đồng bộ trạng thái dựa trên tồn kho
+        if (product.getStockQuantity() > 0 && product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+            product.setStatus(ProductStatus.ACTIVE);
+        } else if (product.getStockQuantity() <= 0 && product.getStatus() == ProductStatus.ACTIVE) {
+            product.setStatus(ProductStatus.OUT_OF_STOCK);
+        }
+
         // Xử lý media nếu có files mới
         if (files != null && files.length > 0) {
             // Xóa media cũ nếu replaceMedia = true
