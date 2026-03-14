@@ -104,7 +104,7 @@ public class OrderController {
         try {
             Long userId = ((User) userDetails).getId();
             boolean isAdmin = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
             OrderResponse order = orderService.getOrderById(id, userId, isAdmin);
             return ResponseEntity.ok(new ApiResponse("Lấy thông tin đơn hàng thành công", order));
         } catch (RuntimeException e) {
@@ -137,7 +137,7 @@ public class OrderController {
     @GetMapping
     public ResponseEntity<?> getAllOrders(@AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
         if (!isAdmin) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
@@ -159,18 +159,19 @@ public class OrderController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
         if (!isAdmin) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
         }
         try {
             String newStatus = body.get("status");
+            String cancelReason = body.get("cancelReason");
             if (newStatus == null || newStatus.isBlank()) {
                 return ResponseEntity.badRequest()
                     .body(new ApiResponse("Thiếu trường 'status'", null));
             }
-            OrderResponse order = orderService.updateOrderStatus(id, newStatus);
+            OrderResponse order = orderService.updateOrderStatus(id, newStatus, cancelReason);
             return ResponseEntity.ok(new ApiResponse("Cập nhật trạng thái thành công", order));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

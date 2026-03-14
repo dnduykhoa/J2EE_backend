@@ -178,11 +178,11 @@ public class OrderService {
     }
 
     /**
-     * Admin: lấy tất cả đơn hàng.
+     * Admin: lấy tất cả đơn hàng, sắp xếp mới nhất trước.
      */
     @Transactional(readOnly = true)
     public List<OrderResponse> getAllOrders() {
-        List<Order> orders = orderRepository.findAll();
+        List<Order> orders = orderRepository.findAllByOrderByCreatedAtDesc();
         List<OrderResponse> result = new ArrayList<>();
         for (Order order : orders) {
             result.add(buildOrderResponse(order));
@@ -195,7 +195,7 @@ public class OrderService {
      * Nếu chuyển sang CANCELLED: hoàn lại tồn kho (trừ DELIVERED vì hàng đã giao xong).
      */
     @Transactional
-    public OrderResponse updateOrderStatus(Long orderId, String newStatus) {
+    public OrderResponse updateOrderStatus(Long orderId, String newStatus, String cancelReason) {
         Order order = orderRepository.findById(orderId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
 
@@ -224,9 +224,9 @@ public class OrderService {
                 }
             }
             order.setCancelledAt(java.time.LocalDateTime.now());
-            if (order.getCancelReason() == null || order.getCancelReason().isBlank()) {
-                order.setCancelReason("Admin huỷ đơn hàng");
-            }
+            order.setCancelReason(
+                (cancelReason != null && !cancelReason.isBlank()) ? cancelReason : "Admin huỷ đơn hàng"
+            );
         }
 
         order.setStatus(newOrderStatus);

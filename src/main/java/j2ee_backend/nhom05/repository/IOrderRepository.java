@@ -25,6 +25,9 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
     // Lấy đơn hàng theo trạng thái (dành cho admin)
     List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
 
+    // Lấy tất cả đơn hàng, sắp xếp mới nhất trước (admin)
+    List<Order> findAllByOrderByCreatedAtDesc();
+
     // Đếm số đơn hàng của user
     long countByUserId(Long userId);
 
