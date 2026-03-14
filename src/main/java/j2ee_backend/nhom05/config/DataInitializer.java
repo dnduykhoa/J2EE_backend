@@ -40,7 +40,7 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) throws Exception {
         initializeRoles();
-        // initializeAdminUser();
+        initializeAdminUser();
         //initializeAttributeGroups();
         //initializeAttributeDefinitions();
     }
