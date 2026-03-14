@@ -39,6 +39,9 @@ public class ProductVariantService {
     @Autowired
     private ProductMediaService productMediaService;
 
+    @Autowired
+    private SseService sseService;
+
     @Transactional(readOnly = true)
     public List<ProductVariant> getVariantsByProduct(Long productId, boolean onlyActive) {
         productRepository.findById(productId)
@@ -85,7 +88,9 @@ public class ProductVariantService {
         List<ProductVariantValue> values = buildVariantValues(existing, request.getValues());
         existing.getValues().addAll(values);
 
-        return productVariantRepository.save(existing);
+        ProductVariant saved = productVariantRepository.save(existing);
+        sseService.broadcastVariantUpdate(productId, saved.getId(), saved.getIsActive(), saved.getStockQuantity());
+        return saved;
     }
 
     @Transactional
@@ -94,6 +99,7 @@ public class ProductVariantService {
             .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể với ID: " + variantId));
         productMediaService.deleteAllVariantMedia(productId, variantId);
         productVariantRepository.delete(existing);
+        sseService.broadcastVariantUpdate(productId, variantId, false, 0);
     }
 
     @Transactional(readOnly = true)
