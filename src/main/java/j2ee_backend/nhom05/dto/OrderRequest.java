@@ -1,11 +1,12 @@
 package j2ee_backend.nhom05.dto;
 
-import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
+import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @AllArgsConstructor
@@ -29,4 +30,7 @@ public class OrderRequest {
     // "CASH" | "VNPAY" | "MOMO"
     @NotBlank(message = "Phương thức thanh toán không được để trống")
     private String paymentMethod;
+
+    // Optional: cho phép checkout theo danh sách items trực tiếp (mua ngay)
+    private List<OrderItemRequest> items;
 }
