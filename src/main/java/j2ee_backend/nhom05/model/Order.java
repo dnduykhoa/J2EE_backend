@@ -74,6 +74,9 @@ public class Order {
     @Column(name = "cancel_reason", columnDefinition = "NVARCHAR(500)")
     private String cancelReason;
 
+    @Column(name = "payment_deadline")
+    private LocalDateTime paymentDeadline;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

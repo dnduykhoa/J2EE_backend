@@ -132,6 +132,37 @@ public class OrderController {
         }
     }
 
+    // ── POST /api/orders/{id}/retry-payment ──────────────────────────────────
+    // User thanh toán lại đơn online còn hạn
+    @PostMapping("/{id}/retry-payment")
+    public ResponseEntity<?> retryPayment(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails,
+            HttpServletRequest httpRequest) {
+        try {
+            Long userId = ((User) userDetails).getId();
+            OrderResponse order = orderService.retryPayment(id, userId);
+
+            // Tạo lại URL thanh toán theo phương thức đơn hàng
+            if ("VNPAY".equalsIgnoreCase(order.getPaymentMethod())) {
+                String ip = resolveClientIp(httpRequest);
+                String vnpayUrl = vnpayService.createPaymentUrl(
+                    order.getOrderCode(), order.getTotalAmount(), ip);
+                order.setVnpayUrl(vnpayUrl);
+            }
+            if ("MOMO".equalsIgnoreCase(order.getPaymentMethod())) {
+                String momoUrl = momoService.createPaymentUrl(
+                    order.getOrderCode(), order.getTotalAmount());
+                order.setMomoUrl(momoUrl);
+            }
+
+            return ResponseEntity.ok(new ApiResponse("Tạo lại thanh toán thành công", order));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
     // ── GET /api/orders  (ADMIN) ──────────────────────────────────────────────
     // Admin lấy tất cả đơn hàng
     @GetMapping

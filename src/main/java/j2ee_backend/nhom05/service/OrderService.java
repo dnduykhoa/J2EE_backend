@@ -1,6 +1,7 @@
 package j2ee_backend.nhom05.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,6 +27,7 @@ import j2ee_backend.nhom05.repository.ICartRepository;
 import j2ee_backend.nhom05.repository.IOrderRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
+import j2ee_backend.nhom05.validator.PhoneValidator;
 
 @Service
 public class OrderService {
@@ -41,6 +43,9 @@ public class OrderService {
 
     @Autowired
     private IUserRepository userRepository;
+
+    @Autowired
+    private EmailService emailService;
 
     /**
      * Tạo đơn hàng từ giỏ hàng hiện tại của user.
@@ -102,12 +107,16 @@ public class OrderService {
         Order order = new Order();
         order.setUser(user);
         order.setFullName(request.getFullName());
-        order.setPhone(request.getPhone());
+        order.setPhone(PhoneValidator.normalize(request.getPhone()));
         order.setEmail(request.getEmail());
         order.setShippingAddress(request.getShippingAddress());
         order.setNote(request.getNote());
         order.setPaymentMethod(paymentMethod);
         order.setStatus(OrderStatus.PENDING);
+        // VNPAY/MOMO: đặt deadline thanh toán = 30 phút kể từ lúc tạo đơn
+        if (paymentMethod == PaymentMethod.VNPAY || paymentMethod == PaymentMethod.MOMO) {
+            order.setPaymentDeadline(LocalDateTime.now().plusMinutes(30));
+        }
 
         // 6. Tạo OrderItem và tính tổng tiền
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -139,6 +148,14 @@ public class OrderService {
 
         // 7. Xoá giỏ hàng sau khi đặt hàng thành công
         cartRepository.delete(cart);
+
+        // 8. Gửi email xác nhận đặt hàng
+        try {
+            emailService.sendOrderConfirmationEmail(
+                savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                savedOrder.getTotalAmount(), savedOrder.getShippingAddress(),
+                savedOrder.getPhone(), savedOrder.getPaymentMethod().name());
+        } catch (Exception ignored) {}
 
         return buildOrderResponse(savedOrder);
     }
@@ -213,14 +230,25 @@ public class OrderService {
                 ProductVariant variant = item.getVariant();
                 restoreStock(product, variant, item.getQuantity());
             }
-            order.setCancelledAt(java.time.LocalDateTime.now());
+            order.setCancelledAt(LocalDateTime.now());
             order.setCancelReason(
                 (cancelReason != null && !cancelReason.isBlank()) ? cancelReason : "Admin huỷ đơn hàng"
             );
         }
 
         order.setStatus(newOrderStatus);
-        return buildOrderResponse(orderRepository.save(order));
+        Order savedOrder = orderRepository.save(order);
+
+        // Gửi email thông báo huỷ đơn (nếu admin chuyển sang CANCELLED)
+        if (newOrderStatus == OrderStatus.CANCELLED) {
+            try {
+                emailService.sendOrderCancelledEmail(
+                    savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                    savedOrder.getTotalAmount(), savedOrder.getCancelReason());
+            } catch (Exception ignored) {}
+        }
+
+        return buildOrderResponse(savedOrder);
     }
 
     /**
@@ -241,10 +269,19 @@ public class OrderService {
             restoreStock(product, variant, item.getQuantity());
         }
         order.setStatus(OrderStatus.CANCELLED);
-        order.setCancelledAt(java.time.LocalDateTime.now());
+        order.setCancelledAt(LocalDateTime.now());
         order.setCancelReason(cancelReason != null && !cancelReason.isBlank()
             ? cancelReason : "Người dùng huỷ đơn");
-        return buildOrderResponse(orderRepository.save(order));
+        Order savedOrder = orderRepository.save(order);
+
+        // Gửi email thông báo huỷ đơn
+        try {
+            emailService.sendOrderCancelledEmail(
+                savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                savedOrder.getTotalAmount(), savedOrder.getCancelReason());
+        } catch (Exception ignored) {}
+
+        return buildOrderResponse(savedOrder);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
@@ -257,26 +294,30 @@ public class OrderService {
             .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng: " + orderCode));
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
+            order.setPaymentDeadline(null);
             orderRepository.save(order);
         }
     }
 
     /**
-     * VNPAY callback: thanh toán thất bại / bị huỷ → hoàn kho, huỷ đơn.
+     * VNPAY callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại deadline và gửi email nhắc.
      */
     @Transactional
     public void cancelVnpayPayment(String orderCode) {
         orderRepository.findByOrderCode(orderCode).ifPresent(order -> {
             if (order.getStatus() == OrderStatus.PENDING) {
-                for (OrderItem item : order.getItems()) {
-                    Product product = item.getProduct();
-                    ProductVariant variant = item.getVariant();
-                    restoreStock(product, variant, item.getQuantity());
-                }
-                order.setStatus(OrderStatus.CANCELLED);
-                order.setCancelledAt(java.time.LocalDateTime.now());
-                order.setCancelReason("Thanh toán VNPay thất bại hoặc bị huỷ");
+                order.setPaymentDeadline(LocalDateTime.now().plusMinutes(30));
                 orderRepository.save(order);
+                try {
+                    emailService.sendPaymentPendingEmail(
+                        order.getEmail(),
+                        order.getFullName(),
+                        order.getOrderCode(),
+                        order.getPaymentDeadline(),
+                        order.getTotalAmount(),
+                        "VNPAY"
+                    );
+                } catch (Exception ignored) {}
             }
         });
     }
@@ -290,28 +331,96 @@ public class OrderService {
             .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng: " + orderCode));
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
+            order.setPaymentDeadline(null);
             orderRepository.save(order);
         }
     }
 
     /**
-     * MoMo callback: thanh toán thất bại / bị huỷ → hoàn kho, huỷ đơn.
+     * MoMo callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại deadline và gửi email nhắc.
      */
     @Transactional
     public void cancelMomoPayment(String orderCode) {
         orderRepository.findByOrderCode(orderCode).ifPresent(order -> {
             if (order.getStatus() == OrderStatus.PENDING) {
-                for (OrderItem item : order.getItems()) {
-                    Product product = item.getProduct();
-                    ProductVariant variant = item.getVariant();
-                    restoreStock(product, variant, item.getQuantity());
-                }
-                order.setStatus(OrderStatus.CANCELLED);
-                order.setCancelledAt(java.time.LocalDateTime.now());
-                order.setCancelReason("Thanh toán MoMo thất bại hoặc bị huỷ");
+                order.setPaymentDeadline(LocalDateTime.now().plusMinutes(30));
                 orderRepository.save(order);
+                try {
+                    emailService.sendPaymentPendingEmail(
+                        order.getEmail(),
+                        order.getFullName(),
+                        order.getOrderCode(),
+                        order.getPaymentDeadline(),
+                        order.getTotalAmount(),
+                        "MoMo"
+                    );
+                } catch (Exception ignored) {}
             }
         });
+    }
+
+    /**
+     * User thanh toán lại đơn hàng online (VNPAY/MOMO).
+     * - Chỉ áp dụng cho đơn PENDING
+     * - Gia hạn deadline thêm 30 phút từ hiện tại
+     */
+    @Transactional
+    public OrderResponse retryPayment(Long orderId, Long userId) {
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new RuntimeException("Đơn hàng không ở trạng thái chờ xác nhận");
+        }
+
+        if (order.getPaymentMethod() != PaymentMethod.VNPAY && order.getPaymentMethod() != PaymentMethod.MOMO) {
+            throw new RuntimeException("Đơn hàng này không áp dụng thanh toán lại online");
+        }
+
+        if (order.getPaymentDeadline() == null || order.getPaymentDeadline().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Đơn hàng đã hết hạn thanh toán");
+        }
+
+        order.setPaymentDeadline(LocalDateTime.now().plusMinutes(30));
+        return buildOrderResponse(orderRepository.save(order));
+    }
+
+    /**
+     * Tự động huỷ các đơn online chưa thanh toán khi quá hạn deadline.
+     */
+    @Transactional
+    public void expireUnpaidOrders() {
+        List<Long> expiredIds = orderRepository.findExpiredUnpaidOrderIds(
+            OrderStatus.PENDING,
+            List.of(PaymentMethod.VNPAY, PaymentMethod.MOMO),
+            LocalDateTime.now()
+        );
+
+        for (Long orderId : expiredIds) {
+            Order order = orderRepository.findByIdWithItems(orderId).orElse(null);
+            if (order == null) continue;
+
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+                ProductVariant variant = item.getVariant();
+                restoreStock(product, variant, item.getQuantity());
+            }
+
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setCancelledAt(LocalDateTime.now());
+            order.setCancelReason("Hết hạn thanh toán online");
+            order.setPaymentDeadline(null);
+            orderRepository.save(order);
+
+            try {
+                emailService.sendPaymentExpiredEmail(
+                    order.getEmail(),
+                    order.getFullName(),
+                    order.getOrderCode(),
+                    order.getTotalAmount()
+                );
+            } catch (Exception ignored) {}
+        }
     }
 
     // ── Stock helpers ─────────────────────────────────────────────────────────────────────
@@ -418,7 +527,8 @@ public class OrderService {
             order.getCancelledAt(),
             order.getCancelReason(),
             null,  // vnpayUrl — được gán bởi controller nếu cần
-            null   // momoUrl  — được gán bởi controller nếu cần
+            null,  // momoUrl  — được gán bởi controller nếu cần
+            order.getPaymentDeadline()
         );
     }
 }

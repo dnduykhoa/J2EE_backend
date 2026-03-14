@@ -52,14 +52,14 @@ public class PaymentController {
             }
             response.sendRedirect(frontendUrl + "/orders?vnpay=success&orderCode=" + orderCode);
         } else {
-            // Thất bại hoặc bị huỷ → hoàn kho, huỷ đơn
+            // Thất bại hoặc bị huỷ → giữ PENDING để user thanh toán lại
             if (orderCode != null) {
                 try {
                     orderService.cancelVnpayPayment(orderCode);
                 } catch (Exception ignored) {}
             }
             String code = responseCode != null ? responseCode : "unknown";
-            response.sendRedirect(frontendUrl + "/checkout?vnpay=failed&code=" + code);
+            response.sendRedirect(frontendUrl + "/orders?vnpay=failed&code=" + code + "&orderCode=" + orderCode);
         }
     }
 
@@ -87,14 +87,14 @@ public class PaymentController {
             }
             response.sendRedirect(frontendUrl + "/orders?momo=success&orderCode=" + orderCode);
         } else {
-            // Thất bại hoặc bị huỷ → hoàn kho, huỷ đơn
+            // Thất bại hoặc bị huỷ → giữ PENDING để user thanh toán lại
             if (orderCode != null) {
                 try {
                     orderService.cancelMomoPayment(orderCode);
                 } catch (Exception ignored) {}
             }
             String code = resultCode != null ? resultCode : "unknown";
-            response.sendRedirect(frontendUrl + "/checkout?momo=failed&code=" + code);
+            response.sendRedirect(frontendUrl + "/orders?momo=failed&code=" + code + "&orderCode=" + orderCode);
         }
     }
 
