@@ -129,13 +129,8 @@ public class OrderService {
             orderItem.setSubtotal(subtotal);
             orderItems.add(orderItem);
 
-            // Trừ tồn kho
-            if (variant != null) {
-                variant.setStockQuantity(variant.getStockQuantity() - cartItem.getQuantity());
-            } else {
-                product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-                productRepository.save(product);
-            }
+            // Trừ tồn kho và cập nhật trạng thái nếu hết hàng
+            deductStock(product, variant, cartItem.getQuantity());
         }
 
         order.setTotalAmount(totalAmount);
@@ -216,12 +211,7 @@ public class OrderService {
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();
                 ProductVariant variant = item.getVariant();
-                if (variant != null) {
-                    variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-                } else {
-                    product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                    productRepository.save(product);
-                }
+                restoreStock(product, variant, item.getQuantity());
             }
             order.setCancelledAt(java.time.LocalDateTime.now());
             if (order.getCancelReason() == null || order.getCancelReason().isBlank()) {
@@ -248,12 +238,7 @@ public class OrderService {
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
             ProductVariant variant = item.getVariant();
-            if (variant != null) {
-                variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-            } else {
-                product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                productRepository.save(product);
-            }
+            restoreStock(product, variant, item.getQuantity());
         }
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelledAt(java.time.LocalDateTime.now());
@@ -286,12 +271,7 @@ public class OrderService {
                 for (OrderItem item : order.getItems()) {
                     Product product = item.getProduct();
                     ProductVariant variant = item.getVariant();
-                    if (variant != null) {
-                        variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-                    } else {
-                        product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                        productRepository.save(product);
-                    }
+                    restoreStock(product, variant, item.getQuantity());
                 }
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelledAt(java.time.LocalDateTime.now());
@@ -324,12 +304,7 @@ public class OrderService {
                 for (OrderItem item : order.getItems()) {
                     Product product = item.getProduct();
                     ProductVariant variant = item.getVariant();
-                    if (variant != null) {
-                        variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-                    } else {
-                        product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-                        productRepository.save(product);
-                    }
+                    restoreStock(product, variant, item.getQuantity());
                 }
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelledAt(java.time.LocalDateTime.now());
@@ -337,6 +312,51 @@ public class OrderService {
                 orderRepository.save(order);
             }
         });
+    }
+
+    // ── Stock helpers ─────────────────────────────────────────────────────────────────────
+    /**
+     * Trừ tồn kho và tự động chuyển trạng thái khi hết hàng.
+     * - Variant: isActive = false khi stockQuantity về 0
+     * - Product : status = OUT_OF_STOCK khi stockQuantity về 0
+     */
+    private void deductStock(Product product, ProductVariant variant, int qty) {
+        if (variant != null) {
+            int newStock = variant.getStockQuantity() - qty;
+            variant.setStockQuantity(newStock);
+            if (newStock <= 0) {
+                variant.setIsActive(false);
+            }
+        } else {
+            int newStock = product.getStockQuantity() - qty;
+            product.setStockQuantity(newStock);
+            if (newStock <= 0) {
+                product.setStatus(ProductStatus.OUT_OF_STOCK);
+            }
+            productRepository.save(product);
+        }
+    }
+
+    /**
+     * Hoàn tồn kho và tự động kích hoạt lại khi có hàng trở lại.
+     * - Variant: isActive = true khi stockQuantity > 0
+     * - Product : status = ACTIVE khi stockQuantity > 0 và đang là OUT_OF_STOCK
+     */
+    private void restoreStock(Product product, ProductVariant variant, int qty) {
+        if (variant != null) {
+            int newStock = variant.getStockQuantity() + qty;
+            variant.setStockQuantity(newStock);
+            if (newStock > 0) {
+                variant.setIsActive(true);
+            }
+        } else {
+            int newStock = product.getStockQuantity() + qty;
+            product.setStockQuantity(newStock);
+            if (product.getStatus() == ProductStatus.OUT_OF_STOCK && newStock > 0) {
+                product.setStatus(ProductStatus.ACTIVE);
+            }
+            productRepository.save(product);
+        }
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────────────────
