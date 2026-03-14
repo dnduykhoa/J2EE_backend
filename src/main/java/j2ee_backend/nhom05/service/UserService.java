@@ -4,6 +4,7 @@ import j2ee_backend.nhom05.model.Role;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.repository.IRoleRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
+import j2ee_backend.nhom05.validator.PhoneValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,7 +78,7 @@ public class UserService {
             user.setFullName(request.getFullName());
         }
         if (request.getPhone() != null) {
-            user.setPhone(request.getPhone());
+            user.setPhone(PhoneValidator.normalize(request.getPhone()));
         }
         if (request.getBirthDate() != null) {
             user.setBirthDate(request.getBirthDate());

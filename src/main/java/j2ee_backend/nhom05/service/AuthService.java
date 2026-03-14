@@ -26,6 +26,7 @@ import j2ee_backend.nhom05.repository.ITwoFactorCodeRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
 import j2ee_backend.nhom05.repository.IRoleRepository;
 import j2ee_backend.nhom05.validator.PasswordValidator;
+import j2ee_backend.nhom05.validator.PhoneValidator;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -77,8 +78,11 @@ public class AuthService {
             throw new RuntimeException("Thông tin đã được sử dụng, vui lòng điền lại thông tin");
         }
         
-        // Chuẩn hóa số điện thoại (xóa khoảng trắng)
-        String phone = request.getPhone().replaceAll("\\s+", "");
+        // Chuẩn hóa số điện thoại (+84/84 → 0, xóa khoảng trắng)
+        String phone = PhoneValidator.normalize(request.getPhone());
+        if (!PhoneValidator.isValid(phone)) {
+            throw new RuntimeException("Số điện thoại Việt Nam không hợp lệ");
+        }
         
         // Kiểm tra số điện thoại đã tồn tại
         if (userRepository.findByPhone(phone).isPresent()) {
@@ -128,15 +132,16 @@ public class AuthService {
         
         // Kiểm tra định dạng: phải là email hoặc số điện thoại
         boolean isEmail = input.matches("^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,}$");
-        boolean isPhone = input.matches("^[0-9]{9,11}$");
+        String normalizedPhone = PhoneValidator.normalize(input);
+        boolean isPhone = PhoneValidator.isValid(normalizedPhone);
         
         if (!isEmail && !isPhone) {
             throw new RuntimeException("Vui lòng nhập đúng định dạng email hoặc số điện thoại");
         }
         
-        // Tìm user theo email hoặc số điện thoại
+        // Tìm user theo email hoặc số điện thoại (phone đã chuẩn hóa thành 0XXXXXXXXX)
         User user = userRepository.findByEmail(input)
-            .orElseGet(() -> userRepository.findByPhone(input)
+            .orElseGet(() -> userRepository.findByPhone(normalizedPhone)
                 .orElseThrow(() -> new RuntimeException("Email hoặc số điện thoại không tồn tại")));
 
         // Kiểm tra tài khoản Google không thể đăng nhập bằng mật khẩu

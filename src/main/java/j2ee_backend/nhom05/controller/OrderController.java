@@ -104,7 +104,7 @@ public class OrderController {
         try {
             Long userId = ((User) userDetails).getId();
             boolean isAdmin = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
             OrderResponse order = orderService.getOrderById(id, userId, isAdmin);
             return ResponseEntity.ok(new ApiResponse("Lấy thông tin đơn hàng thành công", order));
         } catch (RuntimeException e) {
@@ -132,12 +132,43 @@ public class OrderController {
         }
     }
 
+    // ── POST /api/orders/{id}/retry-payment ──────────────────────────────────
+    // User thanh toán lại đơn online còn hạn
+    @PostMapping("/{id}/retry-payment")
+    public ResponseEntity<?> retryPayment(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails,
+            HttpServletRequest httpRequest) {
+        try {
+            Long userId = ((User) userDetails).getId();
+            OrderResponse order = orderService.retryPayment(id, userId);
+
+            // Tạo lại URL thanh toán theo phương thức đơn hàng
+            if ("VNPAY".equalsIgnoreCase(order.getPaymentMethod())) {
+                String ip = resolveClientIp(httpRequest);
+                String vnpayUrl = vnpayService.createPaymentUrl(
+                    order.getOrderCode(), order.getTotalAmount(), ip);
+                order.setVnpayUrl(vnpayUrl);
+            }
+            if ("MOMO".equalsIgnoreCase(order.getPaymentMethod())) {
+                String momoUrl = momoService.createPaymentUrl(
+                    order.getOrderCode(), order.getTotalAmount());
+                order.setMomoUrl(momoUrl);
+            }
+
+            return ResponseEntity.ok(new ApiResponse("Tạo lại thanh toán thành công", order));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
     // ── GET /api/orders  (ADMIN) ──────────────────────────────────────────────
     // Admin lấy tất cả đơn hàng
     @GetMapping
     public ResponseEntity<?> getAllOrders(@AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
         if (!isAdmin) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
@@ -159,18 +190,19 @@ public class OrderController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal UserDetails userDetails) {
         boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
         if (!isAdmin) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
         }
         try {
             String newStatus = body.get("status");
+            String cancelReason = body.get("cancelReason");
             if (newStatus == null || newStatus.isBlank()) {
                 return ResponseEntity.badRequest()
                     .body(new ApiResponse("Thiếu trường 'status'", null));
             }
-            OrderResponse order = orderService.updateOrderStatus(id, newStatus);
+            OrderResponse order = orderService.updateOrderStatus(id, newStatus, cancelReason);
             return ResponseEntity.ok(new ApiResponse("Cập nhật trạng thái thành công", order));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

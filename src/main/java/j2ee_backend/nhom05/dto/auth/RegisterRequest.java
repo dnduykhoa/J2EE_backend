@@ -26,7 +26,10 @@ public class RegisterRequest {
     private String fullName;
     
     @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^[0-9 ]{10,13}$", message = "Số điện thoại không hợp lệ (chỉ gồm chữ số, 10-11 số)")
+    @Pattern(
+        regexp = "^(\\+84|84|0)(3[2-9]|5[25689]|7[06-9]|8[1-9]|9[0-9])\\d{7}$",
+        message = "Số điện thoại Việt Nam không hợp lệ (VD: 0912345678 hoặc +84912345678)"
+    )
     private String phone;
     
     @DateTimeFormat(pattern = "yyyy-MM-dd")

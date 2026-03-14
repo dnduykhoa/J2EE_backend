@@ -31,6 +31,7 @@ public class OrderResponse {
     private String cancelReason;
     private String vnpayUrl;  // Chỉ có giá trị khi paymentMethod = VNPAY
     private String momoUrl;   // Chỉ có giá trị khi paymentMethod = MOMO
+    private LocalDateTime paymentDeadline; // Deadline thanh toán (chỉ có khi VNPAY/MOMO chờ thanh toán)
 
     @Data
     @AllArgsConstructor
