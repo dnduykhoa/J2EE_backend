@@ -1,5 +1,6 @@
 package j2ee_backend.nhom05.service;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import j2ee_backend.nhom05.dto.ProductVariantRequest;
 import j2ee_backend.nhom05.dto.ProductVariantValueRequest;
 import j2ee_backend.nhom05.model.AttributeDefinition;
+import j2ee_backend.nhom05.model.AttributeDefinition.DataType;
 import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductVariant;
 import j2ee_backend.nhom05.model.ProductVariantValue;
@@ -105,7 +107,7 @@ public class ProductVariantService {
             if (variant.getValues() == null) continue;
             for (ProductVariantValue value : variant.getValues()) {
                 String key = normalize(value.getAttrKey());
-                String displayValue = normalize(value.getAttrValue());
+                String displayValue = getComparableValue(value);
                 if (key == null || displayValue == null) continue;
                 optionSet.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(displayValue);
             }
@@ -146,7 +148,7 @@ public class ProductVariantService {
         Map<String, String> variantMap = new LinkedHashMap<>();
         for (ProductVariantValue value : variant.getValues()) {
             String key = normalize(value.getAttrKey());
-            String attrValue = normalize(value.getAttrValue());
+            String attrValue = getComparableValue(value);
             if (key != null && attrValue != null) {
                 variantMap.put(key, attrValue);
             }
@@ -177,7 +179,7 @@ public class ProductVariantService {
             value.setVariant(variant);
             Integer valueDisplayOrder = request.getDisplayOrder();
             value.setDisplayOrder(valueDisplayOrder == null ? 0 : valueDisplayOrder);
-            value.setAttrValue(request.getAttrValue());
+            value.setAttrValue(normalize(request.getAttrValue()));
             value.setValueNumber(request.getValueNumber());
 
             if (request.getAttrDefId() != null) {
@@ -185,6 +187,7 @@ public class ProductVariantService {
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy thuộc tính với ID: " + request.getAttrDefId()));
                 value.setAttributeDefinition(def);
                 value.setAttrKey(def.getAttrKey());
+                enforceValueTypeByDefinition(value, def);
             } else {
                 value.setAttrKey(request.getAttrKey());
             }
@@ -239,5 +242,55 @@ public class ProductVariantService {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void enforceValueTypeByDefinition(ProductVariantValue value, AttributeDefinition def) {
+        DataType dataType = def.getDataType() == null ? DataType.STRING : def.getDataType();
+        String attrValue = normalize(value.getAttrValue());
+        BigDecimal numberValue = value.getValueNumber();
+
+        switch (dataType) {
+            case NUMBER -> {
+                if (numberValue == null && attrValue != null) {
+                    try {
+                        numberValue = new BigDecimal(attrValue);
+                    } catch (NumberFormatException ex) {
+                        throw new RuntimeException("Thuộc tính " + def.getName() + " phải là số");
+                    }
+                }
+                if (numberValue == null) {
+                    throw new RuntimeException("Thuộc tính " + def.getName() + " phải có giá trị số");
+                }
+                value.setValueNumber(numberValue);
+                value.setAttrValue(null);
+            }
+            case BOOLEAN -> {
+                if (attrValue == null) {
+                    throw new RuntimeException("Thuộc tính " + def.getName() + " phải là true/false");
+                }
+                String normalizedBoolean = attrValue.toLowerCase();
+                if (!"true".equals(normalizedBoolean) && !"false".equals(normalizedBoolean)) {
+                    throw new RuntimeException("Thuộc tính " + def.getName() + " chỉ chấp nhận true/false");
+                }
+                value.setAttrValue(normalizedBoolean);
+                value.setValueNumber(null);
+            }
+            case STRING, LIST -> {
+                if (attrValue == null) {
+                    throw new RuntimeException("Thuộc tính " + def.getName() + " không được để trống");
+                }
+                value.setAttrValue(attrValue);
+                value.setValueNumber(null);
+            }
+        }
+    }
+
+    private String getComparableValue(ProductVariantValue value) {
+        String attrValue = normalize(value.getAttrValue());
+        if (attrValue != null) return attrValue;
+        if (value.getValueNumber() != null) {
+            return value.getValueNumber().stripTrailingZeros().toPlainString();
+        }
+        return null;
     }
 }
