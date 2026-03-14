@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import j2ee_backend.nhom05.dto.OrderItemRequest;
 import j2ee_backend.nhom05.dto.OrderRequest;
 import j2ee_backend.nhom05.dto.OrderResponse;
 import j2ee_backend.nhom05.dto.OrderResponse.OrderItemResponse;
@@ -26,6 +27,7 @@ import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.repository.ICartRepository;
 import j2ee_backend.nhom05.repository.IOrderRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
+import j2ee_backend.nhom05.repository.IProductVariantRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
 import j2ee_backend.nhom05.validator.PhoneValidator;
 
@@ -42,10 +44,25 @@ public class OrderService {
     private IProductRepository productRepository;
 
     @Autowired
+    private IProductVariantRepository productVariantRepository;
+
+    @Autowired
     private IUserRepository userRepository;
 
     @Autowired
     private EmailService emailService;
+
+    private static class OrderLineSource {
+        private final Product product;
+        private final ProductVariant variant;
+        private final int quantity;
+
+        private OrderLineSource(Product product, ProductVariant variant, int quantity) {
+            this.product = product;
+            this.variant = variant;
+            this.quantity = quantity;
+        }
+    }
 
     /**
      * Tạo đơn hàng từ giỏ hàng hiện tại của user.
@@ -57,18 +74,50 @@ public class OrderService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        // 2. Lấy giỏ hàng
-        Cart cart = cartRepository.findByUserId(userId)
-            .orElseThrow(() -> new RuntimeException("Giỏ hàng trống, không thể đặt hàng"));
+        // 2. Resolve nguồn item: request.items (mua ngay) hoặc cart hiện tại
+        List<OrderLineSource> orderLines = new ArrayList<>();
+        boolean useCartSource = request.getItems() == null || request.getItems().isEmpty();
+        Cart cart = null;
 
-        if (cart.getItems() == null || cart.getItems().isEmpty()) {
-            throw new RuntimeException("Giỏ hàng trống, không thể đặt hàng");
+        if (!useCartSource) {
+            for (OrderItemRequest item : request.getItems()) {
+                Product product = productRepository.findById(item.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+
+                ProductVariant variant = null;
+                if (item.getVariantId() != null) {
+                    variant = productVariantRepository.findByIdAndProductId(item.getVariantId(), product.getId())
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể hợp lệ cho sản phẩm '" + product.getName() + "'"));
+                }
+
+                int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+                if (qty <= 0) {
+                    throw new RuntimeException("Số lượng sản phẩm phải lớn hơn 0");
+                }
+
+                orderLines.add(new OrderLineSource(product, variant, qty));
+            }
+        } else {
+            cart = cartRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Giỏ hàng trống, không thể đặt hàng"));
+
+            if (cart.getItems() == null || cart.getItems().isEmpty()) {
+                throw new RuntimeException("Giỏ hàng trống, không thể đặt hàng");
+            }
+
+            for (CartItem cartItem : cart.getItems()) {
+                orderLines.add(new OrderLineSource(
+                    cartItem.getProduct(),
+                    cartItem.getVariant(),
+                    cartItem.getQuantity()
+                ));
+            }
         }
 
-        // 3. Validate từng sản phẩm trong giỏ
-        for (CartItem cartItem : cart.getItems()) {
-            Product product = cartItem.getProduct();
-            ProductVariant variant = cartItem.getVariant();
+        // 3. Validate từng dòng sản phẩm
+        for (OrderLineSource line : orderLines) {
+            Product product = line.product;
+            ProductVariant variant = line.variant;
             if (product.getStatus() != ProductStatus.ACTIVE) {
                 throw new RuntimeException("Sản phẩm '" + product.getName() + "' hiện không còn bán");
             }
@@ -80,7 +129,7 @@ public class OrderService {
                 if (variant.getStockQuantity() <= 0) {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' đã hết hàng");
                 }
-                if (cartItem.getQuantity() > variant.getStockQuantity()) {
+                if (line.quantity > variant.getStockQuantity()) {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName()
                         + "' chỉ còn " + variant.getStockQuantity() + " sản phẩm trong kho");
                 }
@@ -88,7 +137,7 @@ public class OrderService {
                 if (product.getStockQuantity() <= 0) {
                     throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
                 }
-                if (cartItem.getQuantity() > product.getStockQuantity()) {
+                if (line.quantity > product.getStockQuantity()) {
                     throw new RuntimeException("Sản phẩm '" + product.getName()
                         + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
                 }
@@ -122,32 +171,34 @@ public class OrderService {
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
 
-        for (CartItem cartItem : cart.getItems()) {
-            Product product = cartItem.getProduct();
-            ProductVariant variant = cartItem.getVariant();
+        for (OrderLineSource line : orderLines) {
+            Product product = line.product;
+            ProductVariant variant = line.variant;
             BigDecimal unitPrice = variant != null ? variant.getPrice() : product.getPrice();
-            BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+            BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(line.quantity));
             totalAmount = totalAmount.add(subtotal);
 
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProduct(product);
             orderItem.setVariant(variant);
-            orderItem.setQuantity(cartItem.getQuantity());
+            orderItem.setQuantity(line.quantity);
             orderItem.setUnitPrice(unitPrice);
             orderItem.setSubtotal(subtotal);
             orderItems.add(orderItem);
 
             // Trừ tồn kho và cập nhật trạng thái nếu hết hàng
-            deductStock(product, variant, cartItem.getQuantity());
+            deductStock(product, variant, line.quantity);
         }
 
         order.setTotalAmount(totalAmount);
         order.setItems(orderItems);
         Order savedOrder = orderRepository.save(order);
 
-        // 7. Xoá giỏ hàng sau khi đặt hàng thành công
-        cartRepository.delete(cart);
+        // 7. Nếu lấy dữ liệu từ giỏ hàng thì xoá giỏ sau khi đặt thành công
+        if (useCartSource && cart != null) {
+            cartRepository.delete(cart);
+        }
 
         // 8. Gửi email xác nhận đặt hàng
         try {
