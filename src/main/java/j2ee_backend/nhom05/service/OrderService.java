@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import j2ee_backend.nhom05.model.OrderItem;
 import j2ee_backend.nhom05.model.OrderStatus;
 import j2ee_backend.nhom05.model.PaymentMethod;
 import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductMedia;
 import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.model.ProductVariant;
 import j2ee_backend.nhom05.model.User;
@@ -51,6 +53,54 @@ public class OrderService {
 
     @Autowired
     private EmailService emailService;
+
+    @Value("${app.backend-url:http://localhost:8080}")
+    private String backendUrl;
+
+    /** Chuyển danh sách OrderItem thành danh sách EmailOrderItem để đưa vào email. */
+    private List<EmailService.EmailOrderItem> buildEmailItems(List<OrderItem> items) {
+        List<EmailService.EmailOrderItem> result = new ArrayList<>();
+        for (OrderItem item : items) {
+            Product product = item.getProduct();
+            // Lấy URL ảnh chính (IMAGE primary)
+            String imageUrl = null;
+            if (product.getMedia() != null) {
+                imageUrl = product.getMedia().stream()
+                    .filter(m -> "IMAGE".equals(m.getMediaType()) && Boolean.TRUE.equals(m.getIsPrimary()))
+                    .findFirst()
+                    .map(ProductMedia::getMediaUrl)
+                    .orElse(product.getMedia().stream()
+                        .filter(m -> "IMAGE".equals(m.getMediaType()))
+                        .findFirst()
+                        .map(ProductMedia::getMediaUrl)
+                        .orElse(null));
+            }
+            // Build full URL
+            if (imageUrl != null && !imageUrl.startsWith("http")) {
+                imageUrl = backendUrl + (imageUrl.startsWith("/") ? imageUrl : "/" + imageUrl);
+            }
+            // Thông tin biến thể
+            String variantInfo = null;
+            if (item.getVariant() != null && item.getVariant().getValues() != null) {
+                variantInfo = item.getVariant().getValues().stream()
+                    .map(v -> {
+                        String key = v.getAttributeDefinition() != null
+                            ? v.getAttributeDefinition().getName() : v.getAttrKey();
+                        return (key != null ? key : "") + ": " + v.getDisplayValue();
+                    })
+                    .collect(Collectors.joining(", "));
+            }
+            result.add(new EmailService.EmailOrderItem(
+                product.getName(),
+                variantInfo,
+                imageUrl,
+                item.getQuantity(),
+                item.getUnitPrice(),
+                item.getSubtotal()
+            ));
+        }
+        return result;
+    }
 
     private static class OrderLineSource {
         private final Product product;
@@ -201,12 +251,17 @@ public class OrderService {
         }
 
         // 8. Gửi email xác nhận đặt hàng
-        try {
-            emailService.sendOrderConfirmationEmail(
-                savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
-                savedOrder.getTotalAmount(), savedOrder.getShippingAddress(),
-                savedOrder.getPhone(), savedOrder.getPaymentMethod().name());
-        } catch (Exception ignored) {}
+        // VNPAY/MoMo: chờ callback thanh toán thành công mới gửi (trong confirmVnpayPayment / confirmMomoPayment)
+        // COD: gửi ngay vì không cần bước thanh toán online
+        if (paymentMethod == PaymentMethod.CASH) {
+            try {
+                emailService.sendOrderConfirmationEmail(
+                    savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                    savedOrder.getTotalAmount(), savedOrder.getShippingAddress(),
+                    savedOrder.getPhone(), savedOrder.getPaymentMethod().name(),
+                    buildEmailItems(savedOrder.getItems()));
+            } catch (Exception ignored) {}
+        }
 
         return buildOrderResponse(savedOrder);
     }
@@ -295,7 +350,8 @@ public class OrderService {
             try {
                 emailService.sendOrderCancelledEmail(
                     savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
-                    savedOrder.getTotalAmount(), savedOrder.getCancelReason());
+                    savedOrder.getTotalAmount(), savedOrder.getCancelReason(),
+                    buildEmailItems(savedOrder.getItems()));
             } catch (Exception ignored) {}
         }
 
@@ -329,7 +385,8 @@ public class OrderService {
         try {
             emailService.sendOrderCancelledEmail(
                 savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
-                savedOrder.getTotalAmount(), savedOrder.getCancelReason());
+                savedOrder.getTotalAmount(), savedOrder.getCancelReason(),
+                buildEmailItems(savedOrder.getItems()));
         } catch (Exception ignored) {}
 
         return buildOrderResponse(savedOrder);
@@ -337,7 +394,7 @@ public class OrderService {
 
     // ── Helper ────────────────────────────────────────────────────────────────
     /**
-     * VNPAY callback: thanh toán thành công → chuyển CONFIRMED.
+     * VNPAY callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi email.
      */
     @Transactional
     public void confirmVnpayPayment(String orderCode) {
@@ -347,6 +404,21 @@ public class OrderService {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setPaymentDeadline(null);
             orderRepository.save(order);
+
+            // Xoá giỏ hàng sau khi thanh toán thành công
+            try {
+                cartRepository.findByUserId(order.getUser().getId())
+                    .ifPresent(cart -> cartRepository.delete(cart));
+            } catch (Exception ignored) {}
+
+            // Gửi email xác nhận thanh toán
+            try {
+                emailService.sendPaymentConfirmedEmail(
+                    order.getEmail(), order.getFullName(), order.getOrderCode(),
+                    order.getTotalAmount(), order.getShippingAddress(),
+                    order.getPhone(), "VNPAY",
+                    buildEmailItems(order.getItems()));
+            } catch (Exception ignored) {}
         }
     }
 
@@ -374,7 +446,7 @@ public class OrderService {
     }
 
     /**
-     * MoMo callback: thanh toán thành công → chuyển CONFIRMED.
+     * MoMo callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi email.
      */
     @Transactional
     public void confirmMomoPayment(String orderCode) {
@@ -384,6 +456,21 @@ public class OrderService {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setPaymentDeadline(null);
             orderRepository.save(order);
+
+            // Xoá giỏ hàng sau khi thanh toán thành công
+            try {
+                cartRepository.findByUserId(order.getUser().getId())
+                    .ifPresent(cart -> cartRepository.delete(cart));
+            } catch (Exception ignored) {}
+
+            // Gửi email xác nhận thanh toán
+            try {
+                emailService.sendPaymentConfirmedEmail(
+                    order.getEmail(), order.getFullName(), order.getOrderCode(),
+                    order.getTotalAmount(), order.getShippingAddress(),
+                    order.getPhone(), "MoMo",
+                    buildEmailItems(order.getItems()));
+            } catch (Exception ignored) {}
         }
     }
 
@@ -413,8 +500,11 @@ public class OrderService {
     /**
      * User thanh toán lại đơn hàng online (VNPAY/MOMO).
      * - Chỉ áp dụng cho đơn PENDING
+     * - Tối đa 3 lần thanh toán lại; vượt quá → tự động huỷ đơn
      * - Gia hạn deadline thêm 30 phút từ hiện tại
      */
+    private static final int MAX_PAYMENT_RETRY = 3;
+
     @Transactional
     public OrderResponse retryPayment(Long orderId, Long userId) {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
@@ -432,6 +522,28 @@ public class OrderService {
             throw new RuntimeException("Đơn hàng đã hết hạn thanh toán");
         }
 
+        // Kiểm tra giới hạn số lần thanh toán lại
+        int retryCount = order.getPaymentRetryCount() != null ? order.getPaymentRetryCount() : 0;
+        if (retryCount >= MAX_PAYMENT_RETRY) {
+            // Vượt quá 3 lần → huỷ đơn và hoàn tồn kho
+            for (OrderItem item : order.getItems()) {
+                restoreStock(item.getProduct(), item.getVariant(), item.getQuantity());
+            }
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setCancelledAt(LocalDateTime.now());
+            order.setCancelReason("Huỷ tự động do vượt quá " + MAX_PAYMENT_RETRY + " lần thanh toán lại");
+            order.setPaymentDeadline(null);
+            Order cancelled = orderRepository.save(order);
+            try {
+                emailService.sendOrderCancelledEmail(
+                    cancelled.getEmail(), cancelled.getFullName(), cancelled.getOrderCode(),
+                    cancelled.getTotalAmount(), cancelled.getCancelReason(),
+                    buildEmailItems(cancelled.getItems()));
+            } catch (Exception ignored) {}
+            throw new RuntimeException("Đơn hàng đã bị huỷ do vượt quá " + MAX_PAYMENT_RETRY + " lần thanh toán lại");
+        }
+
+        order.setPaymentRetryCount(retryCount + 1);
         order.setPaymentDeadline(LocalDateTime.now().plusMinutes(30));
         return buildOrderResponse(orderRepository.save(order));
     }
