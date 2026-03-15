@@ -2,6 +2,7 @@ package j2ee_backend.nhom05.service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,7 +35,7 @@ public class ProductService {
     
     // Lấy tất cả sản phẩm
     public List<Product> getAllProducts() {
-        return productRepository.findAll();
+        return deduplicateById(productRepository.findAll());
     }
     
     // Lấy sản phẩm theo ID
@@ -155,42 +156,42 @@ public class ProductService {
     
     // Tìm kiếm sản phẩm theo tên
     public List<Product> searchProductsByName(String name) {
-        return productRepository.findByNameContainingIgnoreCase(name);
+        return deduplicateById(productRepository.findByNameContainingIgnoreCase(name));
     }
     
     // Lấy sản phẩm theo danh mục
     public List<Product> getProductsByCategory(Long categoryId) {
-        return productRepository.findByCategoryId(categoryId);
+        return deduplicateById(productRepository.findByCategoryId(categoryId));
     }
     
     // Lấy sản phẩm theo thương hiệu
     public List<Product> getProductsByBrand(Long brandId) {
-        return productRepository.findByBrandId(brandId);
+        return deduplicateById(productRepository.findByBrandId(brandId));
     }
     
     // Lấy sản phẩm đang hoạt động (status = ACTIVE)
     public List<Product> getActiveProducts() {
-        return productRepository.findByStatus(ProductStatus.ACTIVE);
+        return deduplicateById(productRepository.findByStatus(ProductStatus.ACTIVE));
     }
 
     // Lấy sản phẩm hết hàng (status = OUT_OF_STOCK)
     public List<Product> getOutOfStockProducts() {
-        return productRepository.findByStatus(ProductStatus.OUT_OF_STOCK);
+        return deduplicateById(productRepository.findByStatus(ProductStatus.OUT_OF_STOCK));
     }
 
     // Lấy sản phẩm ngưng bán (status = INACTIVE)
     public List<Product> getInactiveProducts() {
-        return productRepository.findByStatus(ProductStatus.INACTIVE);
+        return deduplicateById(productRepository.findByStatus(ProductStatus.INACTIVE));
     }
     
     // Lấy sản phẩm theo khoảng giá
     public List<Product> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        return productRepository.findByPriceBetween(minPrice, maxPrice);
+        return deduplicateById(productRepository.findByPriceBetween(minPrice, maxPrice));
     }
 
     // Lấy sản phẩm theo danh sách nhiều categoryId
     public List<Product> getProductsByCategories(List<Long> categoryIds) {
-        return productRepository.findByCategoryIdIn(categoryIds);
+        return deduplicateById(productRepository.findByCategoryIdIn(categoryIds));
     }
 
     // Lấy sản phẩm theo danh mục và tất cả danh mục con của nó
@@ -202,13 +203,27 @@ public class ProductService {
         for (Category child : children) {
             ids.add(child.getId());
         }
-        return productRepository.findByCategoryIdIn(ids);
+        return deduplicateById(productRepository.findByCategoryIdIn(ids));
     }
 
     // Lọc sản phẩm theo nhiều tiêu chí kết hợp (danh mục, thương hiệu, giá, tên)
     public List<Product> filterProducts(List<Long> categoryIds, List<Long> brandIds,
                                         BigDecimal minPrice, BigDecimal maxPrice, String name) {
-        return productRepository.findAll(
-                ProductFilterSpec.build(categoryIds, brandIds, minPrice, maxPrice, name));
+        return deduplicateById(productRepository.findAll(
+                ProductFilterSpec.build(categoryIds, brandIds, minPrice, maxPrice, name)));
+    }
+
+    private List<Product> deduplicateById(List<Product> products) {
+        if (products == null || products.isEmpty()) {
+            return products;
+        }
+        return new ArrayList<>(new LinkedHashMap<>(
+            products.stream().collect(java.util.stream.Collectors.toMap(
+                Product::getId,
+                product -> product,
+                (first, second) -> first,
+                LinkedHashMap::new
+            ))
+        ).values());
     }
 }
