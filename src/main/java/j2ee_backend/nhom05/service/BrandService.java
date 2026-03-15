@@ -1,5 +1,6 @@
 package j2ee_backend.nhom05.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,7 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import j2ee_backend.nhom05.model.Brand;
+import j2ee_backend.nhom05.model.Category;
 import j2ee_backend.nhom05.repository.IBrandRepository;
+import j2ee_backend.nhom05.repository.ICategoryRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 
 @Service
@@ -19,9 +22,12 @@ public class BrandService {
     
     @Autowired
     private IBrandRepository brandRepository;
-    
+
     @Autowired
     private IProductRepository productRepository;
+
+    @Autowired
+    private ICategoryRepository categoryRepository;
     
     // Lấy tất cả brand
     public List<Brand> getAllBrands() {
@@ -36,6 +42,17 @@ public class BrandService {
     // Lấy brand đang hoạt động
     public List<Brand> getActiveBrands() {
         return brandRepository.findByIsActiveTrue();
+    }
+
+    // Lấy brand theo danh mục (cha + tất cả con)
+    public List<Brand> getBrandsByCategory(Long categoryId) {
+        List<Long> categoryIds = new ArrayList<>();
+        categoryIds.add(categoryId);
+        List<Category> children = categoryRepository.findByParentId(categoryId);
+        for (Category child : children) {
+            categoryIds.add(child.getId());
+        }
+        return brandRepository.findActiveBrandsByCategoryIds(categoryIds);
     }
     
     // Tạo brand mới (có thể kèm file logo)

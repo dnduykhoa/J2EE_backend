@@ -3,13 +3,14 @@ package j2ee_backend.nhom05.repository;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductStatus;
 
 @Repository
-public interface IProductRepository extends JpaRepository<Product, Long> {
+public interface IProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
     
     // Tìm sản phẩm theo tên (tìm kiếm không phân biệt hoa thường)
     List<Product> findByNameContainingIgnoreCase(String name);

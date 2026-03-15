@@ -57,6 +57,18 @@ public class BrandController {
                 .body(new ApiResponse(e.getMessage(), null));
         }
     }
+
+    // Lấy brand theo danh mục cha (bao gồm cả danh mục con)
+    @GetMapping("/category/{categoryId}")
+    public ResponseEntity<?> getBrandsByCategory(@PathVariable Long categoryId) {
+        try {
+            List<Brand> brands = brandService.getBrandsByCategory(categoryId);
+            return ResponseEntity.ok(new ApiResponse("Lấy thương hiệu theo danh mục thành công", brands));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
     
     // Thêm brand mới (multipart/form-data)
     @PostMapping("/add")

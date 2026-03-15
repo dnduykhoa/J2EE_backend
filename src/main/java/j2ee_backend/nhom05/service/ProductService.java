@@ -204,4 +204,11 @@ public class ProductService {
         }
         return productRepository.findByCategoryIdIn(ids);
     }
+
+    // Lọc sản phẩm theo nhiều tiêu chí kết hợp (danh mục, thương hiệu, giá, tên)
+    public List<Product> filterProducts(List<Long> categoryIds, List<Long> brandIds,
+                                        BigDecimal minPrice, BigDecimal maxPrice, String name) {
+        return productRepository.findAll(
+                ProductFilterSpec.build(categoryIds, brandIds, minPrice, maxPrice, name));
+    }
 }
