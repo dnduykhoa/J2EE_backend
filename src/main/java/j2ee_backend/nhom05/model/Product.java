@@ -72,6 +72,13 @@ public class Product {
     @ToString.Exclude
     private List<ProductMedia> media = new ArrayList<>();
 
+    public List<ProductMedia> getMedia() {
+        if (media == null) return new ArrayList<>();
+        return media.stream()
+            .filter(m -> m.getVariant() == null)
+            .toList();
+    }
+
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     private List<ProductSpecification> specifications = new ArrayList<>();

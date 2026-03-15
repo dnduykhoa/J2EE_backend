@@ -178,7 +178,7 @@ public class ProductController {
             // Xóa media cũ nếu có danh sách deleteMediaIds
             if (deleteMediaIds != null && !deleteMediaIds.isEmpty()) {
                 for (Long mediaId : deleteMediaIds) {
-                    productMediaService.deleteProductMedia(mediaId);
+                    productMediaService.deleteParentProductMedia(id, mediaId);
                 }
             }
             
@@ -329,11 +329,27 @@ public class ProductController {
         }
     }
 
+    // Upload media cho sản phẩm cha (hỗ trợ upload theo lô nhỏ từ frontend)
+    @PostMapping("/{productId}/media/upload")
+    public ResponseEntity<?> uploadProductMedia(
+            @PathVariable Long productId,
+            @RequestParam(value = "files") MultipartFile[] files,
+            @RequestParam(defaultValue = "true") boolean isPrimary) {
+        try {
+            List<ProductMedia> uploaded = productMediaService.uploadProductMedia(productId, files, isPrimary);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse("Upload media sản phẩm thành công", uploaded));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
     // Xóa một media theo ID
     @DeleteMapping("/{productId}/media/{mediaId}")
     public ResponseEntity<?> deleteMedia(@PathVariable Long productId, @PathVariable Long mediaId) {
         try {
-            productMediaService.deleteProductMedia(mediaId);
+            productMediaService.deleteParentProductMedia(productId, mediaId);
             return ResponseEntity.ok(new ApiResponse("Xóa media thành công", null));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

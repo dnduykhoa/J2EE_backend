@@ -116,6 +116,27 @@ public class ProductMediaService {
         // Xóa record trong DB
         productMediaRepository.delete(media);
     }
+
+    /**
+     * Xóa media thuộc phạm vi sản phẩm cha (không phải media biến thể)
+     */
+    @Transactional
+    public void deleteParentProductMedia(Long productId, Long mediaId) {
+        ProductMedia media = productMediaRepository.findById(mediaId)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy media"));
+
+        if (!media.getProduct().getId().equals(productId)) {
+            throw new RuntimeException("Media không thuộc sản phẩm này");
+        }
+
+        if (media.getVariant() != null) {
+            throw new RuntimeException("Media này thuộc biến thể, không thể xóa ở phạm vi sản phẩm cha");
+        }
+
+        String filePath = media.getMediaUrl().replace("/images/", "");
+        fileStorageService.deleteFile(filePath);
+        productMediaRepository.delete(media);
+    }
     
     /**
      * Lấy tất cả media của sản phẩm

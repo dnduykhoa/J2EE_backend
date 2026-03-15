@@ -218,7 +218,7 @@ public class ProductVariantService {
     }
 
     private void applyVariantFields(ProductVariant variant, ProductVariantRequest request) {
-        variant.setSku(request.getSku());
+        variant.setSku(normalize(request.getSku()));
         variant.setPrice(request.getPrice());
         Integer stockQuantity = request.getStockQuantity();
         Integer displayOrder = request.getDisplayOrder();
@@ -236,7 +236,7 @@ public class ProductVariantService {
             throw new RuntimeException("Dữ liệu biến thể không hợp lệ");
         }
         if (normalize(request.getSku()) == null) {
-            throw new RuntimeException("SKU biến thể không được để trống");
+            throw new RuntimeException("Tên biến thể không được để trống");
         }
         if (request.getPrice() == null || request.getPrice().signum() <= 0) {
             throw new RuntimeException("Giá biến thể phải lớn hơn 0");
@@ -245,6 +245,8 @@ public class ProductVariantService {
             throw new RuntimeException("Số lượng biến thể không được âm");
         }
     }
+
+
 
     private String normalize(String value) {
         if (value == null) return null;
