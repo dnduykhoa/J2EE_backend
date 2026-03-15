@@ -395,4 +395,21 @@ public class ProductController {
                 .body(new ApiResponse(e.getMessage(), null));
         }
     }
+
+    // Lọc sản phẩm kết hợp (danh mục + thương hiệu + khoảng giá + tên)
+    @GetMapping("/filter")
+    public ResponseEntity<?> filterProducts(
+            @RequestParam(required = false) List<Long> categoryIds,
+            @RequestParam(required = false) List<Long> brandIds,
+            @RequestParam(required = false) BigDecimal minPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) String name) {
+        try {
+            List<Product> products = productService.filterProducts(categoryIds, brandIds, minPrice, maxPrice, name);
+            return ResponseEntity.ok(new ApiResponse("Lọc sản phẩm thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
 }
