@@ -140,7 +140,8 @@ public class OrderService {
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể hợp lệ cho sản phẩm '" + product.getName() + "'"));
                 }
 
-                int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+                Integer requestedQty = item.getQuantity();
+                int qty = requestedQty != null ? requestedQty : 0;
                 if (qty <= 0) {
                     throw new RuntimeException("Số lượng sản phẩm phải lớn hơn 0");
                 }
@@ -168,10 +169,6 @@ public class OrderService {
         for (OrderLineSource line : orderLines) {
             Product product = line.product;
             ProductVariant variant = line.variant;
-            if (product.getStatus() != ProductStatus.ACTIVE) {
-                throw new RuntimeException("Sản phẩm '" + product.getName() + "' hiện không còn bán");
-            }
-
             if (variant != null) {
                 if (!Boolean.TRUE.equals(variant.getIsActive())) {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' hiện không còn bán");
@@ -184,6 +181,9 @@ public class OrderService {
                         + "' chỉ còn " + variant.getStockQuantity() + " sản phẩm trong kho");
                 }
             } else {
+                if (product.getStatus() != ProductStatus.ACTIVE) {
+                    throw new RuntimeException("Sản phẩm '" + product.getName() + "' hiện không còn bán");
+                }
                 if (product.getStockQuantity() <= 0) {
                     throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
                 }
@@ -523,7 +523,8 @@ public class OrderService {
         }
 
         // Kiểm tra giới hạn số lần thanh toán lại
-        int retryCount = order.getPaymentRetryCount() != null ? order.getPaymentRetryCount() : 0;
+        Integer savedRetryCount = order.getPaymentRetryCount();
+        int retryCount = savedRetryCount != null ? savedRetryCount : 0;
         if (retryCount >= MAX_PAYMENT_RETRY) {
             // Vượt quá 3 lần → huỷ đơn và hoàn tồn kho
             for (OrderItem item : order.getItems()) {
@@ -596,9 +597,6 @@ public class OrderService {
         if (variant != null) {
             int newStock = variant.getStockQuantity() - qty;
             variant.setStockQuantity(newStock);
-            if (newStock <= 0) {
-                variant.setIsActive(false);
-            }
         } else {
             int newStock = product.getStockQuantity() - qty;
             product.setStockQuantity(newStock);
@@ -618,9 +616,6 @@ public class OrderService {
         if (variant != null) {
             int newStock = variant.getStockQuantity() + qty;
             variant.setStockQuantity(newStock);
-            if (newStock > 0) {
-                variant.setIsActive(true);
-            }
         } else {
             int newStock = product.getStockQuantity() + qty;
             product.setStockQuantity(newStock);

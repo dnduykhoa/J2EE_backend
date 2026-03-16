@@ -222,13 +222,17 @@ public class ProductVariantService {
         variant.setPrice(request.getPrice());
         Integer stockQuantity = request.getStockQuantity();
         Integer displayOrder = request.getDisplayOrder();
+        Boolean requestedActive = request.getIsActive();
 
         int stock = stockQuantity == null ? 0 : stockQuantity;
         variant.setStockQuantity(stock);
         variant.setDisplayOrder(displayOrder == null ? 0 : displayOrder);
 
-        // Tự động đồng bộ isActive dựa trên tồn kho
-        variant.setIsActive(stock > 0);
+        if (requestedActive != null) {
+            variant.setIsActive(requestedActive);
+        } else if (variant.getIsActive() == null) {
+            variant.setIsActive(stock > 0);
+        }
     }
 
     private void validateRequest(ProductVariantRequest request) {

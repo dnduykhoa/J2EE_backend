@@ -13,4 +13,5 @@ public interface IProductVariantRepository extends JpaRepository<ProductVariant,
     List<ProductVariant> findByProductIdOrderByDisplayOrderAsc(Long productId);
     List<ProductVariant> findByProductIdAndIsActiveTrueOrderByDisplayOrderAsc(Long productId);
     Optional<ProductVariant> findByIdAndProductId(Long variantId, Long productId);
+    boolean existsByProductId(Long productId);
 }
