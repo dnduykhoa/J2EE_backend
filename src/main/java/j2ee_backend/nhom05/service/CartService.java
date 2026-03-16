@@ -14,6 +14,7 @@ import j2ee_backend.nhom05.dto.CartResponse.CartItemResponse;
 import j2ee_backend.nhom05.model.Cart;
 import j2ee_backend.nhom05.model.CartItem;
 import j2ee_backend.nhom05.model.Product;
+import j2ee_backend.nhom05.model.ProductMedia;
 import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.model.ProductVariant;
 import j2ee_backend.nhom05.model.User;
@@ -64,7 +65,7 @@ public class CartService {
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + productId));
 
         boolean hasVariants = productVariantRepository.existsByProductId(productId);
-        if (hasVariants && variantId == null) {
+        if (hasVariants && variantId == null && !isParentProductPurchasable(product)) {
             throw new RuntimeException("Sản phẩm này có biến thể. Vui lòng chọn biến thể trước khi thêm vào giỏ hàng");
         }
 
@@ -242,11 +243,25 @@ public class CartService {
                 })
                 .collect(Collectors.toList());
 
+            String variantImageUrl = null;
+            if (variant != null && variant.getMedia() != null) {
+                variantImageUrl = variant.getMedia().stream()
+                    .filter(m -> "IMAGE".equals(m.getMediaType()) && Boolean.TRUE.equals(m.getIsPrimary()))
+                    .map(ProductMedia::getMediaUrl)
+                    .findFirst()
+                    .orElseGet(() -> variant.getMedia().stream()
+                        .filter(m -> "IMAGE".equals(m.getMediaType()))
+                        .map(ProductMedia::getMediaUrl)
+                        .findFirst()
+                        .orElse(null));
+            }
+
             itemResponses.add(new CartItemResponse(
                 item.getId(),
                 product,
                 variant != null ? variant.getId() : null,
                 variant != null ? variant.getSku() : null,
+                variantImageUrl,
                 variantOptions,
                 item.getQuantity(),
                 unitPrice,

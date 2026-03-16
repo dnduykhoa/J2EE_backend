@@ -1,14 +1,16 @@
 package j2ee_backend.nhom05.service;
 
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import j2ee_backend.nhom05.model.AttributeDefinition;
 import j2ee_backend.nhom05.model.Category;
 import j2ee_backend.nhom05.model.CategoryAttribute;
 import j2ee_backend.nhom05.repository.IAttributeDefinitionRepository;
 import j2ee_backend.nhom05.repository.ICategoryAttributeRepository;
 import j2ee_backend.nhom05.repository.ICategoryRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import java.util.List;
 
 @Service
 public class CategoryAttributeService {
