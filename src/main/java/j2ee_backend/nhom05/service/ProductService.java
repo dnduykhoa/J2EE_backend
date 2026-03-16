@@ -136,6 +136,17 @@ public class ProductService {
     }
 
     // Đánh dấu hàng sắp về (chuyển status = OUT_OF_STOCK)
+    // Đánh dấu hàng mới về (chuyển status = NEW_ARRIVAL)
+    public Product markNewArrival(Long id) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+        product.setStatus(ProductStatus.NEW_ARRIVAL);
+        Product saved = productRepository.save(product);
+        sseService.broadcastProductUpdate(saved.getId(), "NEW_ARRIVAL", saved.getStockQuantity());
+        return saved;
+    }
+
+    // Đánh dấu hết hàng (chuyển status = OUT_OF_STOCK)
     public Product markOutOfStock(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
@@ -176,6 +187,12 @@ public class ProductService {
     }
 
     // Lấy sản phẩm hàng sắp về (status = OUT_OF_STOCK)
+    // Lấy sản phẩm hàng mới về (status = NEW_ARRIVAL)
+    public List<Product> getNewArrivalProducts() {
+        return deduplicateById(productRepository.findByStatus(ProductStatus.NEW_ARRIVAL));
+    }
+
+    // Lấy sản phẩm hết hàng (status = OUT_OF_STOCK)
     public List<Product> getOutOfStockProducts() {
         return deduplicateById(productRepository.findByStatus(ProductStatus.OUT_OF_STOCK));
     }

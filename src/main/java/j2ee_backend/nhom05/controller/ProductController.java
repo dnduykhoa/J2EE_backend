@@ -198,6 +198,7 @@ public class ProductController {
     }
 
     // Ngừng kinh doanh sản phẩm (xóa mềm - chuyển isActive = false)
+
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
         try {
@@ -275,6 +276,18 @@ public class ProductController {
         try {
             List<Product> products = productService.getActiveProducts();
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm đang hoạt động thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Lấy sản phẩm hàng mới về (status = NEW_ARRIVAL)
+    @GetMapping("/new-arrival")
+    public ResponseEntity<?> getNewArrivalProducts() {
+        try {
+            List<Product> products = productService.getNewArrivalProducts();
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm hàng mới về thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse(e.getMessage(), null));
@@ -394,6 +407,18 @@ public class ProductController {
         try {
             Product product = productService.markOutOfStock(id);
             return ResponseEntity.ok(new ApiResponse("Đã đánh dấu sản phẩm hàng sắp về", product));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Đánh dấu hàng mới về (status = NEW_ARRIVAL)
+    @PatchMapping("/{id}/new-arrival")
+    public ResponseEntity<?> markNewArrival(@PathVariable Long id) {
+        try {
+            Product product = productService.markNewArrival(id);
+            return ResponseEntity.ok(new ApiResponse("Đã đánh dấu sản phẩm hàng mới về", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse(e.getMessage(), null));
