@@ -63,17 +63,20 @@ public class CartService {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + productId));
 
-        if (product.getStatus() != ProductStatus.ACTIVE) {
-            throw new RuntimeException("Sản phẩm không còn hoạt động");
+        boolean hasVariants = productVariantRepository.existsByProductId(productId);
+        if (hasVariants && variantId == null) {
+            throw new RuntimeException("Sản phẩm này có biến thể. Vui lòng chọn biến thể trước khi thêm vào giỏ hàng");
         }
 
         ProductVariant variant = null;
         if (variantId != null) {
             variant = productVariantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể phù hợp"));
-            if (!Boolean.TRUE.equals(variant.getIsActive())) {
+            if (!isVariantPurchasable(variant)) {
                 throw new RuntimeException("Biến thể không còn hoạt động");
             }
+        } else if (!isParentProductPurchasable(product)) {
+            throw new RuntimeException("Sản phẩm không còn hoạt động");
         }
 
         int availableStock = getAvailableStock(product, variant);
@@ -185,28 +188,24 @@ public class CartService {
         for (CartItem item : cart.getItems()) {
             Product product = item.getProduct();
             ProductVariant variant = item.getVariant();
-            if (product.getStatus() != ProductStatus.ACTIVE) {
-                errors.add("Sản phẩm '" + product.getName() + "' hiện không còn bán");
-                continue;
-            }
 
             if (variant != null) {
-                if (!Boolean.TRUE.equals(variant.getIsActive())) {
+                if (!isVariantPurchasable(variant)) {
                     errors.add("Biến thể của sản phẩm '" + product.getName() + "' hiện không còn bán");
-                    continue;
-                }
-                if (variant.getStockQuantity() <= 0) {
-                    errors.add("Biến thể của sản phẩm '" + product.getName() + "' đã hết hàng");
                     continue;
                 }
                 if (item.getQuantity() > variant.getStockQuantity()) {
                     errors.add("Biến thể của sản phẩm '" + product.getName() + "' chỉ còn "
                         + variant.getStockQuantity() + " sản phẩm trong kho");
                 }
-            } else if (product.getStockQuantity() <= 0) {
-                errors.add("Sản phẩm '" + product.getName() + "' đã hết hàng");
-            } else if (item.getQuantity() > product.getStockQuantity()) {
-                errors.add("Sản phẩm '" + product.getName() + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
+            } else {
+                if (!isParentProductPurchasable(product)) {
+                    errors.add("Sản phẩm '" + product.getName() + "' hiện không còn bán");
+                    continue;
+                }
+                if (item.getQuantity() > product.getStockQuantity()) {
+                    errors.add("Sản phẩm '" + product.getName() + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
+                }
             }
         }
 
@@ -226,7 +225,9 @@ public class CartService {
             Product product = item.getProduct();
             ProductVariant variant = item.getVariant();
 
-            boolean inStock = product.getStatus() == ProductStatus.ACTIVE && getAvailableStock(product, variant) > 0;
+            boolean inStock = variant != null
+                ? isVariantPurchasable(variant)
+                : isParentProductPurchasable(product);
             int availableStock = getAvailableStock(product, variant);
 
             BigDecimal unitPrice = variant != null ? variant.getPrice() : product.getPrice();
@@ -271,5 +272,14 @@ public class CartService {
         }
         Integer stock = product.getStockQuantity();
         return stock == null ? 0 : stock;
+    }
+
+    private boolean isParentProductPurchasable(Product product) {
+        return product.getStatus() == ProductStatus.ACTIVE && getAvailableStock(product, null) > 0;
+    }
+
+    private boolean isVariantPurchasable(ProductVariant variant) {
+        Integer stock = variant.getStockQuantity();
+        return Boolean.TRUE.equals(variant.getIsActive()) && stock != null && stock > 0;
     }
 }
