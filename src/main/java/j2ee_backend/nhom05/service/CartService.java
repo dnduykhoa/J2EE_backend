@@ -82,7 +82,7 @@ public class CartService {
 
         int availableStock = getAvailableStock(product, variant);
         if (availableStock <= 0) {
-            throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
+            throw new RuntimeException("Sản phẩm '" + product.getName() + "' Hàng sắp về");
         }
 
         Cart cart = getOrCreateCart(userId);
@@ -131,7 +131,7 @@ public class CartService {
         int availableStock = getAvailableStock(product, variant);
         int actualQuantity = Math.min(quantity, availableStock);
         if (actualQuantity <= 0) {
-            throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
+            throw new RuntimeException("Sản phẩm '" + product.getName() + "' Hàng sắp về");
         }
 
         cartItem.setQuantity(actualQuantity);

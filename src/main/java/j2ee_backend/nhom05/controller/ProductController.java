@@ -33,19 +33,19 @@ import j2ee_backend.nhom05.service.ProductService;
 @RequestMapping("/api/products")
 @CrossOrigin(origins = "*")
 public class ProductController {
-    
+
     @Autowired
     private ProductService productService;
-    
+
     @Autowired
     private ProductMediaService productMediaService;
-    
+
     @Autowired
     private ICategoryRepository categoryRepository;
-    
+
     @Autowired
     private IBrandRepository brandRepository;
-    
+
     // Lấy tất cả sản phẩm
     @GetMapping("")
     public ResponseEntity<?> getAllProducts() {
@@ -54,10 +54,10 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy danh sách sản phẩm thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Lấy sản phẩm theo ID
     @GetMapping("/{id}")
     public ResponseEntity<?> getProductById(@PathVariable Long id) {
@@ -65,15 +65,15 @@ public class ProductController {
             Product product = productService.getProductById(id).orElse(null);
             if (product == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponse("Không tìm thấy sản phẩm", null));
+                        .body(new ApiResponse("Không tìm thấy sản phẩm", null));
             }
             return ResponseEntity.ok(new ApiResponse("Lấy thông tin sản phẩm thành công", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Thêm sản phẩm mới (với đầy đủ thông tin và media)
     @PostMapping("/add")
     public ResponseEntity<?> createProduct(
@@ -93,17 +93,17 @@ public class ProductController {
             product.setPrice(price);
             product.setStockQuantity(stockQuantity);
             product.setStatus(status);
-            
+
             // Set category
             Category category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
             product.setCategory(category);
-            
+
             // Set brand
             Brand brand = brandRepository.findById(brandId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu"));
             product.setBrand(brand);
-            
+
             // Lưu sản phẩm trước
             Product newProduct = productService.createProduct(product);
 
@@ -114,16 +114,16 @@ public class ProductController {
 
             // Tải lại product từ DB để response bao gồm media vừa upload
             Product savedProduct = productService.getProductById(newProduct.getId())
-                .orElse(newProduct);
+                    .orElse(newProduct);
 
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse("Thêm sản phẩm thành công", savedProduct));
+                    .body(new ApiResponse("Thêm sản phẩm thành công", savedProduct));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Cập nhật sản phẩm (với hoặc không có media)
     @PutMapping("/update/{id}")
     public ResponseEntity<?> updateProduct(
@@ -140,8 +140,8 @@ public class ProductController {
         try {
             // Lấy sản phẩm hiện tại
             Product existingProduct = productService.getProductById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
-            
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
+
             // Cập nhật các trường được gửi lên (chỉ update field nào có giá trị)
             if (name != null) {
                 existingProduct.setName(name);
@@ -151,7 +151,7 @@ public class ProductController {
                 existingProduct.setDescription(description);
             }
 
-            if (price != null) { 
+            if (price != null) {
                 existingProduct.setPrice(price);
             }
 
@@ -162,53 +162,53 @@ public class ProductController {
             if (status != null) {
                 existingProduct.setStatus(status);
             }
-            
+
             if (categoryId != null) {
                 Category category = categoryRepository.findById(categoryId)
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
                 existingProduct.setCategory(category);
             }
 
             if (brandId != null) {
                 Brand brand = brandRepository.findById(brandId)
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu"));
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy thương hiệu"));
                 existingProduct.setBrand(brand);
             }
-            
+
             // Xóa media cũ nếu có danh sách deleteMediaIds
             if (deleteMediaIds != null && !deleteMediaIds.isEmpty()) {
                 for (Long mediaId : deleteMediaIds) {
                     productMediaService.deleteParentProductMedia(id, mediaId);
                 }
             }
-            
+
             // Upload media mới nếu có
             if (files != null && files.length > 0) {
                 productMediaService.uploadProductMedia(id, files, false);
             }
-            
+
             // Lưu product
             Product updatedProduct = productService.updateProduct(id, existingProduct);
-            
+
             return ResponseEntity.ok(new ApiResponse("Cập nhật sản phẩm thành công", updatedProduct));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
-    // Ngưng bán sản phẩm (xóa mềm - chuyển isActive = false)
+
+    // Ngừng kinh doanh sản phẩm (xóa mềm - chuyển isActive = false)
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
         try {
             Product product = productService.deleteProduct(id);
-            return ResponseEntity.ok(new ApiResponse("Đã ngưng bán sản phẩm", product));
+            return ResponseEntity.ok(new ApiResponse("Đã ngừng kinh doanh sản phẩm", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Tìm kiếm sản phẩm theo tên
     @GetMapping("/search")
     public ResponseEntity<?> searchProducts(@RequestParam String name) {
@@ -217,10 +217,10 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Tìm kiếm thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Lấy sản phẩm theo danh mục
     @GetMapping("/category/{categoryId}")
     public ResponseEntity<?> getProductsByCategory(@PathVariable Long categoryId) {
@@ -229,7 +229,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo danh mục thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -241,7 +241,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo nhiều danh mục thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -253,10 +253,10 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo cây danh mục thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Lấy sản phẩm theo thương hiệu
     @GetMapping("/brand/{brandId}")
     public ResponseEntity<?> getProductsByBrand(@PathVariable Long brandId) {
@@ -265,10 +265,10 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo thương hiệu thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Lấy sản phẩm đang hoạt động (status = ACTIVE)
     @GetMapping("/active")
     public ResponseEntity<?> getActiveProducts() {
@@ -277,34 +277,34 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm đang hoạt động thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
-    // Lấy sản phẩm hết hàng (status = OUT_OF_STOCK)
+    // Lấy sản phẩm hàng sắp về (status = OUT_OF_STOCK)
     @GetMapping("/out-of-stock")
     public ResponseEntity<?> getOutOfStockProducts() {
         try {
             List<Product> products = productService.getOutOfStockProducts();
-            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm hết hàng thành công", products));
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm hàng sắp về thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
-    // Lấy sản phẩm ngưng bán (status = INACTIVE)
+    // Lấy sản phẩm ngưng kinh doanh (status = INACTIVE)
     @GetMapping("/inactive")
     public ResponseEntity<?> getInactiveProducts() {
         try {
             List<Product> products = productService.getInactiveProducts();
-            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm ngưng bán thành công", products));
+            return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm ngừng kinh doanh thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Lấy sản phẩm theo khoảng giá
     @GetMapping("/price-range")
     public ResponseEntity<?> getProductsByPriceRange(@RequestParam BigDecimal min, @RequestParam BigDecimal max) {
@@ -313,10 +313,10 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo khoảng giá thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    
+
     // Lấy tất cả media của sản phẩm
     @GetMapping("/{productId}/media")
     public ResponseEntity<?> getProductMedia(@PathVariable Long productId) {
@@ -325,7 +325,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy media thành công", mediaList));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -338,10 +338,10 @@ public class ProductController {
         try {
             List<ProductMedia> uploaded = productMediaService.uploadProductMedia(productId, files, isPrimary);
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse("Upload media sản phẩm thành công", uploaded));
+                    .body(new ApiResponse("Upload media sản phẩm thành công", uploaded));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -353,7 +353,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Xóa media thành công", null));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -365,7 +365,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Đặt ảnh chính thành công", media));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -374,29 +374,29 @@ public class ProductController {
     public ResponseEntity<?> toggleActive(@PathVariable Long id) {
         try {
             Product product = productService.getProductById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
             ProductStatus newStatus = product.getStatus() == ProductStatus.ACTIVE
-                ? ProductStatus.INACTIVE
-                : ProductStatus.ACTIVE;
+                    ? ProductStatus.INACTIVE
+                    : ProductStatus.ACTIVE;
             product.setStatus(newStatus);
             Product updated = productService.updateProduct(id, product);
             String statusLabel = updated.getStatus() == ProductStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
             return ResponseEntity.ok(new ApiResponse("Đã " + statusLabel + " sản phẩm", updated));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
-    // Đánh dấu hết hàng (status = OUT_OF_STOCK)
+    // Đánh dấu hàng sắp về (status = OUT_OF_STOCK)
     @PatchMapping("/{id}/out-of-stock")
     public ResponseEntity<?> markOutOfStock(@PathVariable Long id) {
         try {
             Product product = productService.markOutOfStock(id);
-            return ResponseEntity.ok(new ApiResponse("Đã đánh dấu sản phẩm hết hàng", product));
+            return ResponseEntity.ok(new ApiResponse("Đã đánh dấu sản phẩm hàng sắp về", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -408,7 +408,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Đã kích hoạt lại sản phẩm", product));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
@@ -425,7 +425,7 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lọc sản phẩm thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse(e.getMessage(), null));
+                    .body(new ApiResponse(e.getMessage(), null));
         }
     }
 }

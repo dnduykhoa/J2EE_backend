@@ -57,7 +57,9 @@ public class OrderService {
     @Value("${app.backend-url:http://localhost:8080}")
     private String backendUrl;
 
-    /** Chuyển danh sách OrderItem thành danh sách EmailOrderItem để đưa vào email. */
+    /**
+     * Chuyển danh sách OrderItem thành danh sách EmailOrderItem để đưa vào email.
+     */
     private List<EmailService.EmailOrderItem> buildEmailItems(List<OrderItem> items) {
         List<EmailService.EmailOrderItem> result = new ArrayList<>();
         for (OrderItem item : items) {
@@ -66,14 +68,14 @@ public class OrderService {
             String imageUrl = null;
             if (product.getMedia() != null) {
                 imageUrl = product.getMedia().stream()
-                    .filter(m -> "IMAGE".equals(m.getMediaType()) && Boolean.TRUE.equals(m.getIsPrimary()))
-                    .findFirst()
-                    .map(ProductMedia::getMediaUrl)
-                    .orElse(product.getMedia().stream()
-                        .filter(m -> "IMAGE".equals(m.getMediaType()))
+                        .filter(m -> "IMAGE".equals(m.getMediaType()) && Boolean.TRUE.equals(m.getIsPrimary()))
                         .findFirst()
                         .map(ProductMedia::getMediaUrl)
-                        .orElse(null));
+                        .orElse(product.getMedia().stream()
+                                .filter(m -> "IMAGE".equals(m.getMediaType()))
+                                .findFirst()
+                                .map(ProductMedia::getMediaUrl)
+                                .orElse(null));
             }
             // Build full URL
             if (imageUrl != null && !imageUrl.startsWith("http")) {
@@ -83,21 +85,21 @@ public class OrderService {
             String variantInfo = null;
             if (item.getVariant() != null && item.getVariant().getValues() != null) {
                 variantInfo = item.getVariant().getValues().stream()
-                    .map(v -> {
-                        String key = v.getAttributeDefinition() != null
-                            ? v.getAttributeDefinition().getName() : v.getAttrKey();
-                        return (key != null ? key : "") + ": " + v.getDisplayValue();
-                    })
-                    .collect(Collectors.joining(", "));
+                        .map(v -> {
+                            String key = v.getAttributeDefinition() != null
+                                    ? v.getAttributeDefinition().getName()
+                                    : v.getAttrKey();
+                            return (key != null ? key : "") + ": " + v.getDisplayValue();
+                        })
+                        .collect(Collectors.joining(", "));
             }
             result.add(new EmailService.EmailOrderItem(
-                product.getName(),
-                variantInfo,
-                imageUrl,
-                item.getQuantity(),
-                item.getUnitPrice(),
-                item.getSubtotal()
-            ));
+                    product.getName(),
+                    variantInfo,
+                    imageUrl,
+                    item.getQuantity(),
+                    item.getUnitPrice(),
+                    item.getSubtotal()));
         }
         return result;
     }
@@ -122,7 +124,7 @@ public class OrderService {
     public OrderResponse createOrder(Long userId, OrderRequest request) {
         // 1. Lấy user
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
         // 2. Resolve nguồn item: request.items (mua ngay) hoặc cart hiện tại
         List<OrderLineSource> orderLines = new ArrayList<>();
@@ -132,12 +134,14 @@ public class OrderService {
         if (!useCartSource) {
             for (OrderItemRequest item : request.getItems()) {
                 Product product = productRepository.findById(item.getProductId())
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + item.getProductId()));
+                        .orElseThrow(
+                                () -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + item.getProductId()));
 
                 ProductVariant variant = null;
                 if (item.getVariantId() != null) {
                     variant = productVariantRepository.findByIdAndProductId(item.getVariantId(), product.getId())
-                        .orElseThrow(() -> new RuntimeException("Không tìm thấy biến thể hợp lệ cho sản phẩm '" + product.getName() + "'"));
+                            .orElseThrow(() -> new RuntimeException(
+                                    "Không tìm thấy biến thể hợp lệ cho sản phẩm '" + product.getName() + "'"));
                 }
 
                 Integer requestedQty = item.getQuantity();
@@ -150,7 +154,7 @@ public class OrderService {
             }
         } else {
             cart = cartRepository.findByUserId(userId)
-                .orElseThrow(() -> new RuntimeException("Giỏ hàng trống, không thể đặt hàng"));
+                    .orElseThrow(() -> new RuntimeException("Giỏ hàng trống, không thể đặt hàng"));
 
             if (cart.getItems() == null || cart.getItems().isEmpty()) {
                 throw new RuntimeException("Giỏ hàng trống, không thể đặt hàng");
@@ -158,10 +162,9 @@ public class OrderService {
 
             for (CartItem cartItem : cart.getItems()) {
                 orderLines.add(new OrderLineSource(
-                    cartItem.getProduct(),
-                    cartItem.getVariant(),
-                    cartItem.getQuantity()
-                ));
+                        cartItem.getProduct(),
+                        cartItem.getVariant(),
+                        cartItem.getQuantity()));
             }
         }
 
@@ -174,22 +177,22 @@ public class OrderService {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' hiện không còn bán");
                 }
                 if (variant.getStockQuantity() <= 0) {
-                    throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' đã hết hàng");
+                    throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' Hàng sắp về");
                 }
                 if (line.quantity > variant.getStockQuantity()) {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName()
-                        + "' chỉ còn " + variant.getStockQuantity() + " sản phẩm trong kho");
+                            + "' chỉ còn " + variant.getStockQuantity() + " sản phẩm trong kho");
                 }
             } else {
                 if (product.getStatus() != ProductStatus.ACTIVE) {
                     throw new RuntimeException("Sản phẩm '" + product.getName() + "' hiện không còn bán");
                 }
                 if (product.getStockQuantity() <= 0) {
-                    throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng");
+                    throw new RuntimeException("Sản phẩm '" + product.getName() + "' Hàng sắp về");
                 }
                 if (line.quantity > product.getStockQuantity()) {
                     throw new RuntimeException("Sản phẩm '" + product.getName()
-                        + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
+                            + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
                 }
             }
         }
@@ -237,7 +240,7 @@ public class OrderService {
             orderItem.setSubtotal(subtotal);
             orderItems.add(orderItem);
 
-            // Trừ tồn kho và cập nhật trạng thái nếu hết hàng
+            // Trừ tồn kho và cập nhật trạng thái nếu còn hàng sắp về
             deductStock(product, variant, line.quantity);
         }
 
@@ -251,16 +254,18 @@ public class OrderService {
         }
 
         // 8. Gửi email xác nhận đặt hàng
-        // VNPAY/MoMo: chờ callback thanh toán thành công mới gửi (trong confirmVnpayPayment / confirmMomoPayment)
+        // VNPAY/MoMo: chờ callback thanh toán thành công mới gửi (trong
+        // confirmVnpayPayment / confirmMomoPayment)
         // COD: gửi ngay vì không cần bước thanh toán online
         if (paymentMethod == PaymentMethod.CASH) {
             try {
                 emailService.sendOrderConfirmationEmail(
-                    savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
-                    savedOrder.getTotalAmount(), savedOrder.getShippingAddress(),
-                    savedOrder.getPhone(), savedOrder.getPaymentMethod().name(),
-                    buildEmailItems(savedOrder.getItems()));
-            } catch (Exception ignored) {}
+                        savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                        savedOrder.getTotalAmount(), savedOrder.getShippingAddress(),
+                        savedOrder.getPhone(), savedOrder.getPaymentMethod().name(),
+                        buildEmailItems(savedOrder.getItems()));
+            } catch (Exception ignored) {
+            }
         }
 
         return buildOrderResponse(savedOrder);
@@ -287,10 +292,10 @@ public class OrderService {
         Order order;
         if (isAdmin) {
             order = orderRepository.findByIdWithItems(orderId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
         } else {
             order = orderRepository.findByIdAndUserId(orderId, userId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng hoặc bạn không có quyền xem"));
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng hoặc bạn không có quyền xem"));
         }
         return buildOrderResponse(order);
     }
@@ -310,12 +315,13 @@ public class OrderService {
 
     /**
      * Cập nhật trạng thái đơn hàng (dành cho admin).
-     * Nếu chuyển sang CANCELLED: hoàn lại tồn kho (trừ DELIVERED vì hàng đã giao xong).
+     * Nếu chuyển sang CANCELLED: hoàn lại tồn kho (trừ DELIVERED vì hàng đã giao
+     * xong).
      */
     @Transactional
     public OrderResponse updateOrderStatus(Long orderId, String newStatus, String cancelReason) {
         Order order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
 
         OrderStatus newOrderStatus;
         try {
@@ -338,8 +344,7 @@ public class OrderService {
             }
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelReason(
-                (cancelReason != null && !cancelReason.isBlank()) ? cancelReason : "Admin huỷ đơn hàng"
-            );
+                    (cancelReason != null && !cancelReason.isBlank()) ? cancelReason : "Admin huỷ đơn hàng");
         }
 
         order.setStatus(newOrderStatus);
@@ -349,10 +354,11 @@ public class OrderService {
         if (newOrderStatus == OrderStatus.CANCELLED) {
             try {
                 emailService.sendOrderCancelledEmail(
-                    savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
-                    savedOrder.getTotalAmount(), savedOrder.getCancelReason(),
-                    buildEmailItems(savedOrder.getItems()));
-            } catch (Exception ignored) {}
+                        savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                        savedOrder.getTotalAmount(), savedOrder.getCancelReason(),
+                        buildEmailItems(savedOrder.getItems()));
+            } catch (Exception ignored) {
+            }
         }
 
         return buildOrderResponse(savedOrder);
@@ -365,7 +371,7 @@ public class OrderService {
     @Transactional
     public OrderResponse cancelOrder(Long orderId, Long userId, String cancelReason) {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new RuntimeException("Chỉ có thể huỷ đơn hàng đang ở trạng thái chờ xác nhận");
         }
@@ -378,28 +384,31 @@ public class OrderService {
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelledAt(LocalDateTime.now());
         order.setCancelReason(cancelReason != null && !cancelReason.isBlank()
-            ? cancelReason : "Người dùng huỷ đơn");
+                ? cancelReason
+                : "Người dùng huỷ đơn");
         Order savedOrder = orderRepository.save(order);
 
         // Gửi email thông báo huỷ đơn
         try {
             emailService.sendOrderCancelledEmail(
-                savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
-                savedOrder.getTotalAmount(), savedOrder.getCancelReason(),
-                buildEmailItems(savedOrder.getItems()));
-        } catch (Exception ignored) {}
+                    savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
+                    savedOrder.getTotalAmount(), savedOrder.getCancelReason(),
+                    buildEmailItems(savedOrder.getItems()));
+        } catch (Exception ignored) {
+        }
 
         return buildOrderResponse(savedOrder);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
     /**
-     * VNPAY callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi email.
+     * VNPAY callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi
+     * email.
      */
     @Transactional
     public void confirmVnpayPayment(String orderCode) {
         Order order = orderRepository.findByOrderCode(orderCode)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng: " + orderCode));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng: " + orderCode));
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setPaymentDeadline(null);
@@ -408,22 +417,25 @@ public class OrderService {
             // Xoá giỏ hàng sau khi thanh toán thành công
             try {
                 cartRepository.findByUserId(order.getUser().getId())
-                    .ifPresent(cart -> cartRepository.delete(cart));
-            } catch (Exception ignored) {}
+                        .ifPresent(cart -> cartRepository.delete(cart));
+            } catch (Exception ignored) {
+            }
 
             // Gửi email xác nhận thanh toán
             try {
                 emailService.sendPaymentConfirmedEmail(
-                    order.getEmail(), order.getFullName(), order.getOrderCode(),
-                    order.getTotalAmount(), order.getShippingAddress(),
-                    order.getPhone(), "VNPAY",
-                    buildEmailItems(order.getItems()));
-            } catch (Exception ignored) {}
+                        order.getEmail(), order.getFullName(), order.getOrderCode(),
+                        order.getTotalAmount(), order.getShippingAddress(),
+                        order.getPhone(), "VNPAY",
+                        buildEmailItems(order.getItems()));
+            } catch (Exception ignored) {
+            }
         }
     }
 
     /**
-     * VNPAY callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại deadline và gửi email nhắc.
+     * VNPAY callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại
+     * deadline và gửi email nhắc.
      */
     @Transactional
     public void cancelVnpayPayment(String orderCode) {
@@ -433,25 +445,26 @@ public class OrderService {
                 orderRepository.save(order);
                 try {
                     emailService.sendPaymentPendingEmail(
-                        order.getEmail(),
-                        order.getFullName(),
-                        order.getOrderCode(),
-                        order.getPaymentDeadline(),
-                        order.getTotalAmount(),
-                        "VNPAY"
-                    );
-                } catch (Exception ignored) {}
+                            order.getEmail(),
+                            order.getFullName(),
+                            order.getOrderCode(),
+                            order.getPaymentDeadline(),
+                            order.getTotalAmount(),
+                            "VNPAY");
+                } catch (Exception ignored) {
+                }
             }
         });
     }
 
     /**
-     * MoMo callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi email.
+     * MoMo callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi
+     * email.
      */
     @Transactional
     public void confirmMomoPayment(String orderCode) {
         Order order = orderRepository.findByOrderCode(orderCode)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng: " + orderCode));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng: " + orderCode));
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setPaymentDeadline(null);
@@ -460,22 +473,25 @@ public class OrderService {
             // Xoá giỏ hàng sau khi thanh toán thành công
             try {
                 cartRepository.findByUserId(order.getUser().getId())
-                    .ifPresent(cart -> cartRepository.delete(cart));
-            } catch (Exception ignored) {}
+                        .ifPresent(cart -> cartRepository.delete(cart));
+            } catch (Exception ignored) {
+            }
 
             // Gửi email xác nhận thanh toán
             try {
                 emailService.sendPaymentConfirmedEmail(
-                    order.getEmail(), order.getFullName(), order.getOrderCode(),
-                    order.getTotalAmount(), order.getShippingAddress(),
-                    order.getPhone(), "MoMo",
-                    buildEmailItems(order.getItems()));
-            } catch (Exception ignored) {}
+                        order.getEmail(), order.getFullName(), order.getOrderCode(),
+                        order.getTotalAmount(), order.getShippingAddress(),
+                        order.getPhone(), "MoMo",
+                        buildEmailItems(order.getItems()));
+            } catch (Exception ignored) {
+            }
         }
     }
 
     /**
-     * MoMo callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại deadline và gửi email nhắc.
+     * MoMo callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại
+     * deadline và gửi email nhắc.
      */
     @Transactional
     public void cancelMomoPayment(String orderCode) {
@@ -485,14 +501,14 @@ public class OrderService {
                 orderRepository.save(order);
                 try {
                     emailService.sendPaymentPendingEmail(
-                        order.getEmail(),
-                        order.getFullName(),
-                        order.getOrderCode(),
-                        order.getPaymentDeadline(),
-                        order.getTotalAmount(),
-                        "MoMo"
-                    );
-                } catch (Exception ignored) {}
+                            order.getEmail(),
+                            order.getFullName(),
+                            order.getOrderCode(),
+                            order.getPaymentDeadline(),
+                            order.getTotalAmount(),
+                            "MoMo");
+                } catch (Exception ignored) {
+                }
             }
         });
     }
@@ -508,7 +524,7 @@ public class OrderService {
     @Transactional
     public OrderResponse retryPayment(Long orderId, Long userId) {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
 
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new RuntimeException("Đơn hàng không ở trạng thái chờ xác nhận");
@@ -537,10 +553,11 @@ public class OrderService {
             Order cancelled = orderRepository.save(order);
             try {
                 emailService.sendOrderCancelledEmail(
-                    cancelled.getEmail(), cancelled.getFullName(), cancelled.getOrderCode(),
-                    cancelled.getTotalAmount(), cancelled.getCancelReason(),
-                    buildEmailItems(cancelled.getItems()));
-            } catch (Exception ignored) {}
+                        cancelled.getEmail(), cancelled.getFullName(), cancelled.getOrderCode(),
+                        cancelled.getTotalAmount(), cancelled.getCancelReason(),
+                        buildEmailItems(cancelled.getItems()));
+            } catch (Exception ignored) {
+            }
             throw new RuntimeException("Đơn hàng đã bị huỷ do vượt quá " + MAX_PAYMENT_RETRY + " lần thanh toán lại");
         }
 
@@ -555,14 +572,14 @@ public class OrderService {
     @Transactional
     public void expireUnpaidOrders() {
         List<Long> expiredIds = orderRepository.findExpiredUnpaidOrderIds(
-            OrderStatus.PENDING,
-            List.of(PaymentMethod.VNPAY, PaymentMethod.MOMO),
-            LocalDateTime.now()
-        );
+                OrderStatus.PENDING,
+                List.of(PaymentMethod.VNPAY, PaymentMethod.MOMO),
+                LocalDateTime.now());
 
         for (Long orderId : expiredIds) {
             Order order = orderRepository.findByIdWithItems(orderId).orElse(null);
-            if (order == null) continue;
+            if (order == null)
+                continue;
 
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();
@@ -578,18 +595,19 @@ public class OrderService {
 
             try {
                 emailService.sendPaymentExpiredEmail(
-                    order.getEmail(),
-                    order.getFullName(),
-                    order.getOrderCode(),
-                    order.getTotalAmount()
-                );
-            } catch (Exception ignored) {}
+                        order.getEmail(),
+                        order.getFullName(),
+                        order.getOrderCode(),
+                        order.getTotalAmount());
+            } catch (Exception ignored) {
+            }
         }
     }
 
-    // ── Stock helpers ─────────────────────────────────────────────────────────────────────
+    // ── Stock helpers
+    // ─────────────────────────────────────────────────────────────────────
     /**
-     * Trừ tồn kho và tự động chuyển trạng thái khi hết hàng.
+     * Trừ tồn kho và tự động chuyển trạng thái khi hàng sắp về / hết hàng:
      * - Variant: isActive = false khi stockQuantity về 0
      * - Product : status = OUT_OF_STOCK khi stockQuantity về 0
      */
@@ -626,7 +644,8 @@ public class OrderService {
         }
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────────────────
+    // ── Helper
+    // ────────────────────────────────────────────────────────────────────────────
     private OrderResponse buildOrderResponse(Order order) {
         List<OrderItemResponse> itemResponses = new ArrayList<>();
         for (OrderItem item : order.getItems()) {
@@ -636,57 +655,57 @@ public class OrderService {
             String productImageUrl = null;
             if (product.getMedia() != null) {
                 productImageUrl = product.getMedia().stream()
-                    .filter(m -> Boolean.TRUE.equals(m.getIsPrimary()) && "IMAGE".equals(m.getMediaType()))
-                    .findFirst()
-                    .map(m -> m.getMediaUrl())
-                    .orElse(product.getMedia().stream()
-                        .filter(m -> "IMAGE".equals(m.getMediaType()))
+                        .filter(m -> Boolean.TRUE.equals(m.getIsPrimary()) && "IMAGE".equals(m.getMediaType()))
                         .findFirst()
                         .map(m -> m.getMediaUrl())
-                        .orElse(null));
+                        .orElse(product.getMedia().stream()
+                                .filter(m -> "IMAGE".equals(m.getMediaType()))
+                                .findFirst()
+                                .map(m -> m.getMediaUrl())
+                                .orElse(null));
             }
 
             itemResponses.add(new OrderItemResponse(
-                item.getId(),
-                product.getId(),
-                product.getName(),
-                productImageUrl,
-                item.getVariant() != null ? item.getVariant().getId() : null,
-                item.getVariant() != null ? item.getVariant().getSku() : null,
-                item.getVariant() != null
-                    ? item.getVariant().getValues().stream()
-                        .map(v -> {
-                            String key = v.getAttributeDefinition() != null ? v.getAttributeDefinition().getName() : v.getAttrKey();
-                            return (key != null ? key : "") + ": " + v.getDisplayValue();
-                        })
-                        .collect(Collectors.toList())
-                    : null,
-                item.getQuantity(),
-                item.getUnitPrice(),
-                item.getSubtotal()
-            ));
+                    item.getId(),
+                    product.getId(),
+                    product.getName(),
+                    productImageUrl,
+                    item.getVariant() != null ? item.getVariant().getId() : null,
+                    item.getVariant() != null ? item.getVariant().getSku() : null,
+                    item.getVariant() != null
+                            ? item.getVariant().getValues().stream()
+                                    .map(v -> {
+                                        String key = v.getAttributeDefinition() != null
+                                                ? v.getAttributeDefinition().getName()
+                                                : v.getAttrKey();
+                                        return (key != null ? key : "") + ": " + v.getDisplayValue();
+                                    })
+                                    .collect(Collectors.toList())
+                            : null,
+                    item.getQuantity(),
+                    item.getUnitPrice(),
+                    item.getSubtotal()));
         }
 
         return new OrderResponse(
-            order.getId(),
-            order.getOrderCode(),
-            order.getUser().getId(),
-            order.getFullName(),
-            order.getPhone(),
-            order.getEmail(),
-            order.getShippingAddress(),
-            order.getNote(),
-            order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null,
-            order.getStatus() != null ? order.getStatus().name() : null,
-            order.getTotalAmount(),
-            itemResponses,
-            order.getCreatedAt(),
-            order.getUpdatedAt(),
-            order.getCancelledAt(),
-            order.getCancelReason(),
-            null,  // vnpayUrl — được gán bởi controller nếu cần
-            null,  // momoUrl  — được gán bởi controller nếu cần
-            order.getPaymentDeadline()
-        );
+                order.getId(),
+                order.getOrderCode(),
+                order.getUser().getId(),
+                order.getFullName(),
+                order.getPhone(),
+                order.getEmail(),
+                order.getShippingAddress(),
+                order.getNote(),
+                order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null,
+                order.getStatus() != null ? order.getStatus().name() : null,
+                order.getTotalAmount(),
+                itemResponses,
+                order.getCreatedAt(),
+                order.getUpdatedAt(),
+                order.getCancelledAt(),
+                order.getCancelReason(),
+                null, // vnpayUrl — được gán bởi controller nếu cần
+                null, // momoUrl — được gán bởi controller nếu cần
+                order.getPaymentDeadline());
     }
 }
