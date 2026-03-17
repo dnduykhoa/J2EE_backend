@@ -173,24 +173,18 @@ public class OrderService {
             Product product = line.product;
             ProductVariant variant = line.variant;
             if (variant != null) {
-                if (!Boolean.TRUE.equals(variant.getIsActive())) {
+                if (!isVariantAvailableForOrder(variant)) {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' hiện không còn bán");
                 }
-                if (variant.getStockQuantity() <= 0) {
-                    throw new RuntimeException("Biến thể của sản phẩm '" + product.getName() + "' Hàng sắp về");
-                }
-                if (line.quantity > variant.getStockQuantity()) {
+                if (!isVariantPreorderable(variant) && line.quantity > variant.getStockQuantity()) {
                     throw new RuntimeException("Biến thể của sản phẩm '" + product.getName()
                             + "' chỉ còn " + variant.getStockQuantity() + " sản phẩm trong kho");
                 }
             } else {
-                if (product.getStatus() != ProductStatus.ACTIVE) {
+                if (!isProductAvailableForOrder(product)) {
                     throw new RuntimeException("Sản phẩm '" + product.getName() + "' hiện không còn bán");
                 }
-                if (product.getStockQuantity() <= 0) {
-                    throw new RuntimeException("Sản phẩm '" + product.getName() + "' Hàng sắp về");
-                }
-                if (line.quantity > product.getStockQuantity()) {
+                if (!isProductPreorderable(product) && line.quantity > product.getStockQuantity()) {
                     throw new RuntimeException("Sản phẩm '" + product.getName()
                             + "' chỉ còn " + product.getStockQuantity() + " sản phẩm trong kho");
                 }
@@ -240,8 +234,10 @@ public class OrderService {
             orderItem.setSubtotal(subtotal);
             orderItems.add(orderItem);
 
-            // Trừ tồn kho và cập nhật trạng thái nếu còn hàng sắp về
-            deductStock(product, variant, line.quantity);
+            // Trừ tồn kho nếu đây không phải đơn đặt trước
+            if (!isPreorderLine(product, variant)) {
+                deductStock(product, variant, line.quantity);
+            }
         }
 
         order.setTotalAmount(totalAmount);
@@ -642,6 +638,44 @@ public class OrderService {
             }
             productRepository.save(product);
         }
+    }
+
+    private boolean isProductPurchasable(Product product) {
+        ProductStatus status = product.getStatus();
+        return (status == ProductStatus.ACTIVE || status == ProductStatus.NEW_ARRIVAL)
+                && product.getStockQuantity() != null
+                && product.getStockQuantity() > 0;
+    }
+
+    private boolean isProductPreorderable(Product product) {
+        return product.getStatus() == ProductStatus.OUT_OF_STOCK;
+    }
+
+    private boolean isProductAvailableForOrder(Product product) {
+        return isProductPurchasable(product) || isProductPreorderable(product);
+    }
+
+    private boolean isVariantPurchasable(ProductVariant variant) {
+        return Boolean.TRUE.equals(variant.getIsActive())
+                && variant.getStockQuantity() != null
+                && variant.getStockQuantity() > 0;
+    }
+
+    private boolean isVariantPreorderable(ProductVariant variant) {
+        return Boolean.TRUE.equals(variant.getIsActive())
+                && variant.getStockQuantity() != null
+                && variant.getStockQuantity() <= 0;
+    }
+
+    private boolean isVariantAvailableForOrder(ProductVariant variant) {
+        return isVariantPurchasable(variant) || isVariantPreorderable(variant);
+    }
+
+    private boolean isPreorderLine(Product product, ProductVariant variant) {
+        if (variant != null) {
+            return isVariantPreorderable(variant);
+        }
+        return isProductPreorderable(product);
     }
 
     // ── Helper

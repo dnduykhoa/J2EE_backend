@@ -44,6 +44,9 @@ public class ProductVariantService {
     @Autowired
     private SseService sseService;
 
+    @Autowired
+    private PreorderRequestService preorderRequestService;
+
     @Transactional(readOnly = true)
     public List<ProductVariant> getVariantsByProduct(Long productId, boolean onlyActive) {
         productRepository.findById(productId)
@@ -73,7 +76,9 @@ public class ProductVariantService {
         List<ProductVariantValue> values = buildVariantValues(variant, request.getValues());
         variant.setValues(values);
 
-        return productVariantRepository.save(variant);
+        ProductVariant saved = productVariantRepository.save(variant);
+        preorderRequestService.notifyVariantAvailability(product, saved);
+        return saved;
     }
 
     @Transactional
@@ -92,6 +97,7 @@ public class ProductVariantService {
 
         ProductVariant saved = productVariantRepository.save(existing);
         sseService.broadcastVariantUpdate(productId, saved.getId(), saved.getIsActive(), saved.getStockQuantity());
+        preorderRequestService.notifyVariantAvailability(saved.getProduct(), saved);
         return saved;
     }
 

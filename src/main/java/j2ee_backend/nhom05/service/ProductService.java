@@ -1,6 +1,7 @@
 package j2ee_backend.nhom05.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +34,9 @@ public class ProductService {
     @Autowired
     private SseService sseService;
 
+    @Autowired
+    private PreorderRequestService preorderRequestService;
+
     // Lấy tất cả sản phẩm
     public List<Product> getAllProducts() {
         return deduplicateById(productRepository.findAll());
@@ -59,13 +63,18 @@ public class ProductService {
             }
         }
 
-        return productRepository.save(product);
+        normalizeStatusByStock(product, null, true);
+        Product saved = productRepository.save(product);
+        preorderRequestService.notifyProductAvailability(saved);
+        return saved;
     }
 
     // Cập nhật sản phẩm (chỉ thông tin cơ bản)
     public Product updateProduct(Long id, Product productDetails) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+
+        ProductStatus previousStatus = product.getStatus();
 
         product.setName(productDetails.getName());
         product.setDescription(productDetails.getDescription());
@@ -75,15 +84,11 @@ public class ProductService {
         product.setBrand(productDetails.getBrand());
         product.setStatus(productDetails.getStatus());
 
-        // Tự động đồng bộ trạng thái dựa trên tồn kho
-        if (product.getStockQuantity() > 0 && product.getStatus() == ProductStatus.OUT_OF_STOCK) {
-            product.setStatus(ProductStatus.ACTIVE);
-        } else if (product.getStockQuantity() <= 0 && product.getStatus() == ProductStatus.ACTIVE) {
-            product.setStatus(ProductStatus.OUT_OF_STOCK);
-        }
+        normalizeStatusByStock(product, previousStatus, false);
 
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), saved.getStatus().name(), saved.getStockQuantity());
+        preorderRequestService.notifyProductAvailability(saved);
         return saved;
     }
 
@@ -92,6 +97,8 @@ public class ProductService {
             boolean replaceMedia) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+
+        ProductStatus previousStatus = product.getStatus();
 
         // Cập nhật thông tin cơ bản
         product.setName(productDetails.getName());
@@ -102,12 +109,7 @@ public class ProductService {
         product.setBrand(productDetails.getBrand());
         product.setStatus(productDetails.getStatus());
 
-        // Tự động đồng bộ trạng thái dựa trên tồn kho
-        if (product.getStockQuantity() > 0 && product.getStatus() == ProductStatus.OUT_OF_STOCK) {
-            product.setStatus(ProductStatus.ACTIVE);
-        } else if (product.getStockQuantity() <= 0 && product.getStatus() == ProductStatus.ACTIVE) {
-            product.setStatus(ProductStatus.OUT_OF_STOCK);
-        }
+        normalizeStatusByStock(product, previousStatus, false);
 
         // Xử lý media nếu có files mới
         if (files != null && files.length > 0) {
@@ -122,6 +124,7 @@ public class ProductService {
 
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), saved.getStatus().name(), saved.getStockQuantity());
+        preorderRequestService.notifyProductAvailability(saved);
         return saved;
     }
 
@@ -130,6 +133,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
         product.setStatus(ProductStatus.INACTIVE);
+        product.setNewArrivalAt(null);
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), "INACTIVE", saved.getStockQuantity());
         return saved;
@@ -140,9 +144,17 @@ public class ProductService {
     public Product markNewArrival(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+        if (product.getStatus() != ProductStatus.OUT_OF_STOCK) {
+            throw new RuntimeException("Chỉ có thể đánh dấu hàng mới về từ trạng thái Hàng sắp về");
+        }
+        if (product.getStockQuantity() == null || product.getStockQuantity() <= 0) {
+            throw new RuntimeException("Cần nhập tồn kho lớn hơn 0 trước khi chuyển sang Hàng mới về");
+        }
         product.setStatus(ProductStatus.NEW_ARRIVAL);
+        product.setNewArrivalAt(LocalDateTime.now());
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), "NEW_ARRIVAL", saved.getStockQuantity());
+        preorderRequestService.notifyProductAvailability(saved);
         return saved;
     }
 
@@ -150,7 +162,11 @@ public class ProductService {
     public Product markOutOfStock(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
+        if (product.getStockQuantity() != null && product.getStockQuantity() > 0) {
+            throw new RuntimeException("Không thể gán Hàng sắp về khi tồn kho vẫn lớn hơn 0");
+        }
         product.setStatus(ProductStatus.OUT_OF_STOCK);
+        product.setNewArrivalAt(null);
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), "OUT_OF_STOCK", saved.getStockQuantity());
         return saved;
@@ -161,6 +177,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + id));
         product.setStatus(ProductStatus.ACTIVE);
+        product.setNewArrivalAt(null);
         Product saved = productRepository.save(product);
         sseService.broadcastProductUpdate(saved.getId(), "ACTIVE", saved.getStockQuantity());
         return saved;
@@ -242,5 +259,58 @@ public class ProductService {
                         (first, second) -> first,
                         LinkedHashMap::new)))
                 .values());
+    }
+
+    private void normalizeStatusByStock(Product product, ProductStatus previousStatus, boolean isCreate) {
+        if (product.getStatus() == ProductStatus.INACTIVE) {
+            product.setNewArrivalAt(null);
+            return;
+        }
+
+        Integer stockValue = product.getStockQuantity();
+        int stock = stockValue != null ? stockValue.intValue() : 0;
+        if (stock <= 0) {
+            product.setStatus(ProductStatus.OUT_OF_STOCK);
+            product.setNewArrivalAt(null);
+            return;
+        }
+
+        if (isCreate) {
+            product.setStatus(ProductStatus.NEW_ARRIVAL);
+            product.setNewArrivalAt(LocalDateTime.now());
+            return;
+        }
+
+        if (previousStatus == ProductStatus.OUT_OF_STOCK) {
+            product.setStatus(ProductStatus.NEW_ARRIVAL);
+            product.setNewArrivalAt(LocalDateTime.now());
+            return;
+        }
+
+        if (product.getStatus() == null) {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+
+        if (product.getStatus() == ProductStatus.NEW_ARRIVAL) {
+            if (product.getNewArrivalAt() == null) {
+                product.setNewArrivalAt(LocalDateTime.now());
+            }
+        } else {
+            product.setNewArrivalAt(null);
+        }
+    }
+
+    public void expireNewArrivalProducts() {
+        LocalDateTime threshold = LocalDateTime.now().minusDays(5);
+        List<Product> expiredProducts = productRepository.findByStatusAndNewArrivalAtBefore(
+            ProductStatus.NEW_ARRIVAL,
+            threshold
+        );
+        for (Product product : expiredProducts) {
+            product.setStatus(ProductStatus.ACTIVE);
+            product.setNewArrivalAt(null);
+            Product saved = productRepository.save(product);
+            sseService.broadcastProductUpdate(saved.getId(), "ACTIVE", saved.getStockQuantity());
+        }
     }
 }

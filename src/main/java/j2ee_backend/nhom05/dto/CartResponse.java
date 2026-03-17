@@ -34,5 +34,6 @@ public class CartResponse {
         private BigDecimal subtotal;
         private boolean inStock;
         private Integer availableStock;
+        private boolean preorder;
     }
 }
