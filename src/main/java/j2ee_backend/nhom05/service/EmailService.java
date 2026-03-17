@@ -430,6 +430,104 @@ public class EmailService {
         }
     }
 
+    public void sendPreorderConfirmationEmail(
+            String toEmail,
+            String fullName,
+            String productName,
+            String variantInfo,
+            Integer desiredQuantity) {
+        if (toEmail == null || toEmail.isBlank()) return;
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("TechStore - Xác nhận đăng ký chờ hàng");
+
+            String customerName = (fullName != null && !fullName.isBlank()) ? fullName : "bạn";
+            String quantityText = desiredQuantity != null ? String.valueOf(desiredQuantity) : "1";
+            String variantHtml = (variantInfo != null && !variantInfo.isBlank())
+                ? "<p style='margin:0 0 8px 0;'><b>Phân loại:</b> " + variantInfo + "</p>"
+                : "";
+
+            String htmlContent =
+                "<div style='font-family: Arial, sans-serif; background:#f4f6f8; padding:30px;'>"
+                + "<div style='max-width:620px; margin:auto; background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08);'>"
+                + "<div style='background:#0f766e; color:white; padding:22px; text-align:center;'>"
+                + "<h2 style='margin:0;'>TechStore</h2>"
+                + "<p style='margin:4px 0 0 0; font-size:14px;'>Xác nhận đăng ký chờ hàng</p>"
+                + "</div>"
+                + "<div style='padding:28px;'>"
+                + "<p style='margin:0 0 12px 0;'>Xin chào <b>" + customerName + "</b>,</p>"
+                + "<p style='margin:0 0 16px 0;'>Chúng tôi đã ghi nhận yêu cầu chờ hàng của bạn tại TechStore.</p>"
+                + "<div style='background:#f0fdfa; border:1px solid #99f6e4; border-radius:8px; padding:16px;'>"
+                + "<p style='margin:0 0 8px 0;'><b>Sản phẩm:</b> " + productName + "</p>"
+                + variantHtml
+                + "<p style='margin:0;'><b>Số lượng mong muốn:</b> " + quantityText + "</p>"
+                + "</div>"
+                + "<p style='margin:18px 0 0 0;'>Khi hàng về, hệ thống sẽ tự động gửi email thông báo cho bạn theo thứ tự đăng ký.</p>"
+                + "<p style='margin-top:24px;'>Trân trọng,<br><b>TechStore Team</b></p>"
+                + "</div>"
+                + "</div>"
+                + "</div>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể gửi email xác nhận chờ hàng: " + e.getMessage());
+        }
+    }
+
+    public void sendPreorderAvailableEmail(
+            String toEmail,
+            String fullName,
+            String productName,
+            String variantInfo,
+            Integer desiredQuantity) {
+        if (toEmail == null || toEmail.isBlank()) return;
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("TechStore - Sản phẩm bạn chờ đã có hàng");
+
+            String customerName = (fullName != null && !fullName.isBlank()) ? fullName : "bạn";
+            String quantityText = desiredQuantity != null ? String.valueOf(desiredQuantity) : "1";
+            String variantHtml = (variantInfo != null && !variantInfo.isBlank())
+                ? "<p style='margin:0 0 8px 0;'><b>Phân loại:</b> " + variantInfo + "</p>"
+                : "";
+
+            String htmlContent =
+                "<div style='font-family: Arial, sans-serif; background:#f4f6f8; padding:30px;'>"
+                + "<div style='max-width:620px; margin:auto; background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08);'>"
+                + "<div style='background:#ea580c; color:white; padding:22px; text-align:center;'>"
+                + "<h2 style='margin:0;'>TechStore</h2>"
+                + "<p style='margin:4px 0 0 0; font-size:14px;'>Thông báo hàng đã về</p>"
+                + "</div>"
+                + "<div style='padding:28px;'>"
+                + "<p style='margin:0 0 12px 0;'>Xin chào <b>" + customerName + "</b>,</p>"
+                + "<p style='margin:0 0 16px 0;'>Sản phẩm bạn đã đăng ký chờ tại TechStore hiện đã có hàng.</p>"
+                + "<div style='background:#fff7ed; border:1px solid #fdba74; border-radius:8px; padding:16px;'>"
+                + "<p style='margin:0 0 8px 0;'><b>Sản phẩm:</b> " + productName + "</p>"
+                + variantHtml
+                + "<p style='margin:0;'><b>Số lượng bạn đã đăng ký:</b> " + quantityText + "</p>"
+                + "</div>"
+                + "<p style='margin:18px 0 0 0;'>Bạn có thể quay lại website để đặt mua ngay khi còn hàng.</p>"
+                + "<p style='margin-top:24px;'>Trân trọng,<br><b>TechStore Team</b></p>"
+                + "</div>"
+                + "</div>"
+                + "</div>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể gửi email báo hàng về: " + e.getMessage());
+        }
+    }
+
     // Gửi email thông báo đơn hàng đã bị huỷ do quá hạn thanh toán
     public void sendPaymentExpiredEmail(
             String toEmail,

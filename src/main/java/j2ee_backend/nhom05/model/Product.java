@@ -93,6 +93,9 @@ public class Product {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "new_arrival_at")
+    private LocalDateTime newArrivalAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     private ProductStatus status = ProductStatus.ACTIVE;

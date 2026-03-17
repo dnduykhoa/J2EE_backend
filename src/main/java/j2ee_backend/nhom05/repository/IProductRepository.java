@@ -1,5 +1,6 @@
 package j2ee_backend.nhom05.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,6 +33,8 @@ public interface IProductRepository extends JpaRepository<Product, Long>, JpaSpe
 
     // Tìm sản phẩm theo trạng thái
     List<Product> findByStatus(ProductStatus status);
+
+    List<Product> findByStatusAndNewArrivalAtBefore(ProductStatus status, LocalDateTime threshold);
     
     // Tìm sản phẩm theo khoảng giá
     List<Product> findByPriceBetween(java.math.BigDecimal minPrice, java.math.BigDecimal maxPrice);
