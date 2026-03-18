@@ -2,6 +2,7 @@ package j2ee_backend.nhom05.model;
 
 import lombok.Data;
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import jakarta.persistence.*;
@@ -30,6 +31,7 @@ public class Order {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User user;
 
     @Column(name = "full_name", length = 100, columnDefinition = "NVARCHAR(100)")
@@ -55,11 +57,36 @@ public class Order {
     @Column(name = "status", length = 20)
     private OrderStatus status = OrderStatus.PENDING;
 
+    // Tổng tiền gốc (trước khi trừ giảm giá)
+    @Column(name = "original_amount", precision = 18, scale = 2)
+    private BigDecimal originalAmount;
+
+    // Số tiền giảm từ chương trình sale
+    @Column(name = "sale_discount", precision = 18, scale = 2)
+    private BigDecimal saleDiscount = BigDecimal.ZERO;
+
+    // Số tiền giảm từ voucher
+    @Column(name = "voucher_discount", precision = 18, scale = 2)
+    private BigDecimal voucherDiscount = BigDecimal.ZERO;
+
+    // Mã voucher đã áp dụng (lưu để tham chiếu)
+    @Column(name = "applied_voucher_code", length = 50)
+    private String appliedVoucherCode;
+
+    // Voucher đã áp dụng
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "applied_voucher_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Voucher appliedVoucher;
+
+    // Tổng tiền thực tế (sau khi trừ tất cả giảm giá)
     @Column(name = "total_amount", precision = 18, scale = 2)
     private BigDecimal totalAmount;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<OrderItem> items = new ArrayList<>();
 
     @Column(name = "created_at")
@@ -87,6 +114,8 @@ public class Order {
         if (orderCode == null || orderCode.isBlank()) {
             orderCode = generateOrderCode();
         }
+        if (saleDiscount == null) saleDiscount = BigDecimal.ZERO;
+        if (voucherDiscount == null) voucherDiscount = BigDecimal.ZERO;
     }
 
     private String generateOrderCode() {

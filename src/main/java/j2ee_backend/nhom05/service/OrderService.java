@@ -26,11 +26,13 @@ import j2ee_backend.nhom05.model.ProductMedia;
 import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.model.ProductVariant;
 import j2ee_backend.nhom05.model.User;
+import j2ee_backend.nhom05.model.Voucher;
 import j2ee_backend.nhom05.repository.ICartRepository;
 import j2ee_backend.nhom05.repository.IOrderRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 import j2ee_backend.nhom05.repository.IProductVariantRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
+import j2ee_backend.nhom05.repository.IVoucherRepository;
 import j2ee_backend.nhom05.validator.PhoneValidator;
 
 @Service
@@ -52,7 +54,16 @@ public class OrderService {
     private IUserRepository userRepository;
 
     @Autowired
+    private IVoucherRepository voucherRepository;
+
+    @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private SaleProgramService saleProgramService;
+
+    @Autowired
+    private VoucherService voucherService;
 
     @Value("${app.backend-url:http://localhost:8080}")
     private String backendUrl;
@@ -64,7 +75,6 @@ public class OrderService {
         List<EmailService.EmailOrderItem> result = new ArrayList<>();
         for (OrderItem item : items) {
             Product product = item.getProduct();
-            // Lấy URL ảnh chính (IMAGE primary)
             String imageUrl = null;
             if (product.getMedia() != null) {
                 imageUrl = product.getMedia().stream()
@@ -77,11 +87,9 @@ public class OrderService {
                                 .map(ProductMedia::getMediaUrl)
                                 .orElse(null));
             }
-            // Build full URL
             if (imageUrl != null && !imageUrl.startsWith("http")) {
                 imageUrl = backendUrl + (imageUrl.startsWith("/") ? imageUrl : "/" + imageUrl);
             }
-            // Thông tin biến thể
             String variantInfo = null;
             if (item.getVariant() != null && item.getVariant().getValues() != null) {
                 variantInfo = item.getVariant().getValues().stream()
@@ -209,21 +217,23 @@ public class OrderService {
         order.setNote(request.getNote());
         order.setPaymentMethod(paymentMethod);
         order.setStatus(OrderStatus.PENDING);
-        // VNPAY/MOMO: đặt deadline thanh toán = 30 phút kể từ lúc tạo đơn
         if (paymentMethod == PaymentMethod.VNPAY || paymentMethod == PaymentMethod.MOMO) {
             order.setPaymentDeadline(LocalDateTime.now().plusMinutes(30));
         }
 
-        // 6. Tạo OrderItem và tính tổng tiền
-        BigDecimal totalAmount = BigDecimal.ZERO;
+        // 6. Tạo OrderItem, tính tổng tiền gốc và danh sách dòng để tính sale
+        BigDecimal originalAmount = BigDecimal.ZERO;
+        int totalQuantity = 0;
         List<OrderItem> orderItems = new ArrayList<>();
+        List<SaleProgramService.OrderLineInfo> saleLines = new ArrayList<>();
 
         for (OrderLineSource line : orderLines) {
             Product product = line.product;
             ProductVariant variant = line.variant;
             BigDecimal unitPrice = variant != null ? variant.getPrice() : product.getPrice();
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(line.quantity));
-            totalAmount = totalAmount.add(subtotal);
+            originalAmount = originalAmount.add(subtotal);
+            totalQuantity += line.quantity;
 
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
@@ -234,25 +244,56 @@ public class OrderService {
             orderItem.setSubtotal(subtotal);
             orderItems.add(orderItem);
 
+            saleLines.add(new SaleProgramService.OrderLineInfo(product.getId(), unitPrice, line.quantity));
+
             // Trừ tồn kho nếu đây không phải đơn đặt trước
             if (!isPreorderLine(product, variant)) {
                 deductStock(product, variant, line.quantity);
             }
         }
 
+        // 7. Tính giảm giá từ sale program
+        BigDecimal saleDiscount = saleProgramService.calculateSaleDiscount(
+                saleLines,
+                paymentMethod.name(),
+                originalAmount,
+                totalQuantity);
+
+        // 8. Tính giảm giá từ voucher (áp trên số tiền sau khi đã trừ sale)
+        BigDecimal afterSaleAmount = originalAmount.subtract(saleDiscount).max(BigDecimal.ZERO);
+        BigDecimal voucherDiscount = BigDecimal.ZERO;
+        String voucherCode = request.getVoucherCode();
+        Voucher appliedVoucher = null;
+
+        if (voucherCode != null && !voucherCode.isBlank()) {
+            voucherDiscount = voucherService.calculateDiscount(voucherCode.trim(), afterSaleAmount, userId);
+            appliedVoucher = voucherRepository.findByCodeIgnoreCase(voucherCode.trim()).orElse(null);
+        }
+
+        // 9. Tổng tiền cuối = tiền sau sale - giảm voucher
+        BigDecimal totalAmount = afterSaleAmount.subtract(voucherDiscount).max(BigDecimal.ZERO);
+
+        order.setOriginalAmount(originalAmount);
+        order.setSaleDiscount(saleDiscount);
+        order.setVoucherDiscount(voucherDiscount);
+        order.setAppliedVoucherCode(appliedVoucher != null ? appliedVoucher.getCode() : null);
+        order.setAppliedVoucher(appliedVoucher);
         order.setTotalAmount(totalAmount);
         order.setItems(orderItems);
+
         Order savedOrder = orderRepository.save(order);
 
-        // 7. Nếu lấy dữ liệu từ giỏ hàng thì xoá giỏ sau khi đặt thành công
+        // 10. Đánh dấu voucher đã được sử dụng
+        if (appliedVoucher != null) {
+            voucherService.markUsed(appliedVoucher.getCode(), user, savedOrder);
+        }
+
+        // 11. Nếu lấy dữ liệu từ giỏ hàng thì xoá giỏ sau khi đặt thành công
         if (useCartSource && cart != null) {
             cartRepository.delete(cart);
         }
 
-        // 8. Gửi email xác nhận đặt hàng
-        // VNPAY/MoMo: chờ callback thanh toán thành công mới gửi (trong
-        // confirmVnpayPayment / confirmMomoPayment)
-        // COD: gửi ngay vì không cần bước thanh toán online
+        // 12. Gửi email
         if (paymentMethod == PaymentMethod.CASH) {
             try {
                 emailService.sendOrderConfirmationEmail(
@@ -310,9 +351,8 @@ public class OrderService {
     }
 
     /**
-     * Cập nhật trạng thái đơn hàng (dành cho admin).
-     * Nếu chuyển sang CANCELLED: hoàn lại tồn kho (trừ DELIVERED vì hàng đã giao
-     * xong).
+     * Admin cập nhật trạng thái đơn hàng.
+     * Nếu chuyển sang CANCELLED: hoàn tồn kho + hoàn voucher.
      */
     @Transactional
     public OrderResponse updateOrderStatus(Long orderId, String newStatus, String cancelReason) {
@@ -328,8 +368,6 @@ public class OrderService {
 
         OrderStatus currentStatus = order.getStatus();
 
-        // Nếu admin chuyển sang CANCELLED và đơn chưa bị huỷ/chưa giao xong
-        // → hoàn lại tồn kho
         if (newOrderStatus == OrderStatus.CANCELLED
                 && currentStatus != OrderStatus.CANCELLED
                 && currentStatus != OrderStatus.DELIVERED) {
@@ -341,12 +379,13 @@ public class OrderService {
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelReason(
                     (cancelReason != null && !cancelReason.isBlank()) ? cancelReason : "Admin huỷ đơn hàng");
+            // Hoàn lại voucher về trạng thái chưa dùng
+            voucherService.releaseVoucher(orderId);
         }
 
         order.setStatus(newOrderStatus);
         Order savedOrder = orderRepository.save(order);
 
-        // Gửi email thông báo huỷ đơn (nếu admin chuyển sang CANCELLED)
         if (newOrderStatus == OrderStatus.CANCELLED) {
             try {
                 emailService.sendOrderCancelledEmail(
@@ -362,7 +401,6 @@ public class OrderService {
 
     /**
      * User huỷ đơn hàng (chỉ khi còn PENDING).
-     * cancelReason: lý do huỷ (từ danh sách mặc định hoặc người dùng tự nhập)
      */
     @Transactional
     public OrderResponse cancelOrder(Long orderId, Long userId, String cancelReason) {
@@ -371,12 +409,14 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new RuntimeException("Chỉ có thể huỷ đơn hàng đang ở trạng thái chờ xác nhận");
         }
-        // Hoàn lại tồn kho
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
             ProductVariant variant = item.getVariant();
             restoreStock(product, variant, item.getQuantity());
         }
+        // Hoàn lại voucher
+        voucherService.releaseVoucher(orderId);
+
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelledAt(LocalDateTime.now());
         order.setCancelReason(cancelReason != null && !cancelReason.isBlank()
@@ -384,7 +424,6 @@ public class OrderService {
                 : "Người dùng huỷ đơn");
         Order savedOrder = orderRepository.save(order);
 
-        // Gửi email thông báo huỷ đơn
         try {
             emailService.sendOrderCancelledEmail(
                     savedOrder.getEmail(), savedOrder.getFullName(), savedOrder.getOrderCode(),
@@ -396,11 +435,8 @@ public class OrderService {
         return buildOrderResponse(savedOrder);
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────
-    /**
-     * VNPAY callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi
-     * email.
-     */
+    // ── Payment callbacks ─────────────────────────────────────────────────────
+
     @Transactional
     public void confirmVnpayPayment(String orderCode) {
         Order order = orderRepository.findByOrderCode(orderCode)
@@ -410,14 +446,12 @@ public class OrderService {
             order.setPaymentDeadline(null);
             orderRepository.save(order);
 
-            // Xoá giỏ hàng sau khi thanh toán thành công
             try {
                 cartRepository.findByUserId(order.getUser().getId())
                         .ifPresent(cart -> cartRepository.delete(cart));
             } catch (Exception ignored) {
             }
 
-            // Gửi email xác nhận thanh toán
             try {
                 emailService.sendPaymentConfirmedEmail(
                         order.getEmail(), order.getFullName(), order.getOrderCode(),
@@ -429,10 +463,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * VNPAY callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại
-     * deadline và gửi email nhắc.
-     */
     @Transactional
     public void cancelVnpayPayment(String orderCode) {
         orderRepository.findByOrderCode(orderCode).ifPresent(order -> {
@@ -453,10 +483,6 @@ public class OrderService {
         });
     }
 
-    /**
-     * MoMo callback: thanh toán thành công → chuyển CONFIRMED, xoá giỏ hàng, gửi
-     * email.
-     */
     @Transactional
     public void confirmMomoPayment(String orderCode) {
         Order order = orderRepository.findByOrderCode(orderCode)
@@ -466,14 +492,12 @@ public class OrderService {
             order.setPaymentDeadline(null);
             orderRepository.save(order);
 
-            // Xoá giỏ hàng sau khi thanh toán thành công
             try {
                 cartRepository.findByUserId(order.getUser().getId())
                         .ifPresent(cart -> cartRepository.delete(cart));
             } catch (Exception ignored) {
             }
 
-            // Gửi email xác nhận thanh toán
             try {
                 emailService.sendPaymentConfirmedEmail(
                         order.getEmail(), order.getFullName(), order.getOrderCode(),
@@ -485,10 +509,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * MoMo callback: thanh toán thất bại / bị huỷ → giữ đơn PENDING, đặt lại
-     * deadline và gửi email nhắc.
-     */
     @Transactional
     public void cancelMomoPayment(String orderCode) {
         orderRepository.findByOrderCode(orderCode).ifPresent(order -> {
@@ -509,12 +529,6 @@ public class OrderService {
         });
     }
 
-    /**
-     * User thanh toán lại đơn hàng online (VNPAY/MOMO).
-     * - Chỉ áp dụng cho đơn PENDING
-     * - Tối đa 3 lần thanh toán lại; vượt quá → tự động huỷ đơn
-     * - Gia hạn deadline thêm 30 phút từ hiện tại
-     */
     private static final int MAX_PAYMENT_RETRY = 3;
 
     @Transactional
@@ -534,14 +548,13 @@ public class OrderService {
             throw new RuntimeException("Đơn hàng đã hết hạn thanh toán");
         }
 
-        // Kiểm tra giới hạn số lần thanh toán lại
         Integer savedRetryCount = order.getPaymentRetryCount();
         int retryCount = savedRetryCount != null ? savedRetryCount : 0;
         if (retryCount >= MAX_PAYMENT_RETRY) {
-            // Vượt quá 3 lần → huỷ đơn và hoàn tồn kho
             for (OrderItem item : order.getItems()) {
                 restoreStock(item.getProduct(), item.getVariant(), item.getQuantity());
             }
+            voucherService.releaseVoucher(orderId);
             order.setStatus(OrderStatus.CANCELLED);
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelReason("Huỷ tự động do vượt quá " + MAX_PAYMENT_RETRY + " lần thanh toán lại");
@@ -583,6 +596,8 @@ public class OrderService {
                 restoreStock(product, variant, item.getQuantity());
             }
 
+            voucherService.releaseVoucher(orderId);
+
             order.setStatus(OrderStatus.CANCELLED);
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelReason("Hết hạn thanh toán online");
@@ -600,13 +615,8 @@ public class OrderService {
         }
     }
 
-    // ── Stock helpers
-    // ─────────────────────────────────────────────────────────────────────
-    /**
-     * Trừ tồn kho và tự động chuyển trạng thái khi hàng sắp về / hết hàng:
-     * - Variant: isActive = false khi stockQuantity về 0
-     * - Product : status = OUT_OF_STOCK khi stockQuantity về 0
-     */
+    // ── Stock helpers ─────────────────────────────────────────────────────────
+
     private void deductStock(Product product, ProductVariant variant, int qty) {
         if (variant != null) {
             int newStock = variant.getStockQuantity() - qty;
@@ -621,11 +631,6 @@ public class OrderService {
         }
     }
 
-    /**
-     * Hoàn tồn kho và tự động kích hoạt lại khi có hàng trở lại.
-     * - Variant: isActive = true khi stockQuantity > 0
-     * - Product : status = ACTIVE khi stockQuantity > 0 và đang là OUT_OF_STOCK
-     */
     private void restoreStock(Product product, ProductVariant variant, int qty) {
         if (variant != null) {
             int newStock = variant.getStockQuantity() + qty;
@@ -678,14 +683,13 @@ public class OrderService {
         return isProductPreorderable(product);
     }
 
-    // ── Helper
-    // ────────────────────────────────────────────────────────────────────────────
+    // ── Build response ────────────────────────────────────────────────────────
+
     private OrderResponse buildOrderResponse(Order order) {
         List<OrderItemResponse> itemResponses = new ArrayList<>();
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
 
-            // Lấy URL ảnh đại diện sản phẩm
             String productImageUrl = null;
             if (product.getMedia() != null) {
                 productImageUrl = product.getMedia().stream()
@@ -721,25 +725,31 @@ public class OrderService {
                     item.getSubtotal()));
         }
 
-        return new OrderResponse(
-                order.getId(),
-                order.getOrderCode(),
-                order.getUser().getId(),
-                order.getFullName(),
-                order.getPhone(),
-                order.getEmail(),
-                order.getShippingAddress(),
-                order.getNote(),
-                order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null,
-                order.getStatus() != null ? order.getStatus().name() : null,
-                order.getTotalAmount(),
-                itemResponses,
-                order.getCreatedAt(),
-                order.getUpdatedAt(),
-                order.getCancelledAt(),
-                order.getCancelReason(),
-                null, // vnpayUrl — được gán bởi controller nếu cần
-                null, // momoUrl — được gán bởi controller nếu cần
-                order.getPaymentDeadline());
+        // Dùng setter thay vì all-args constructor để tránh phụ thuộc vào thứ tự field
+        OrderResponse resp = new OrderResponse();
+        resp.setId(order.getId());
+        resp.setOrderCode(order.getOrderCode());
+        resp.setUserId(order.getUser().getId());
+        resp.setFullName(order.getFullName());
+        resp.setPhone(order.getPhone());
+        resp.setEmail(order.getEmail());
+        resp.setShippingAddress(order.getShippingAddress());
+        resp.setNote(order.getNote());
+        resp.setPaymentMethod(order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
+        resp.setStatus(order.getStatus() != null ? order.getStatus().name() : null);
+        resp.setOriginalAmount(order.getOriginalAmount());
+        resp.setSaleDiscount(order.getSaleDiscount() != null ? order.getSaleDiscount() : BigDecimal.ZERO);
+        resp.setVoucherDiscount(order.getVoucherDiscount() != null ? order.getVoucherDiscount() : BigDecimal.ZERO);
+        resp.setAppliedVoucherCode(order.getAppliedVoucherCode());
+        resp.setTotalAmount(order.getTotalAmount());
+        resp.setItems(itemResponses);
+        resp.setCreatedAt(order.getCreatedAt());
+        resp.setUpdatedAt(order.getUpdatedAt());
+        resp.setCancelledAt(order.getCancelledAt());
+        resp.setCancelReason(order.getCancelReason());
+        resp.setVnpayUrl(null);   // được gán bởi controller nếu cần
+        resp.setMomoUrl(null);    // được gán bởi controller nếu cần
+        resp.setPaymentDeadline(order.getPaymentDeadline());
+        return resp;
     }
 }

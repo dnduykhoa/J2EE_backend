@@ -3,13 +3,11 @@ package j2ee_backend.nhom05.repository;
 import j2ee_backend.nhom05.model.Order;
 import j2ee_backend.nhom05.model.OrderStatus;
 import j2ee_backend.nhom05.model.PaymentMethod;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
-import jakarta.persistence.QueryHint;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,11 +34,9 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
     // Đếm số đơn hàng của user
     long countByUserId(Long userId);
 
-    // Tìm đơn có load luôn items (tránh N+1)
-    // @QueryHints passDistinctThrough=false: Hibernate dedup trong memory, không sinh SELECT DISTINCT SQL
-    // (SQL Server không hỗ trợ DISTINCT trên cột NVARCHAR(MAX) / ntext)
-    @QueryHints(value = @QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
-    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items oi LEFT JOIN FETCH oi.product WHERE o.id = :id")
+    // Tìm đơn hàng theo id để xử lý (items/products sẽ lazy-load trong @Transactional)
+    // Không dùng JOIN FETCH + DISTINCT để tránh lỗi SQL Server với cột ntext (products.description)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findByIdWithItems(@Param("id") Long id);
 
     // Lấy ID các đơn PENDING VNPAY/MOMO đã quá hạn (không JOIN để tránh lỗi DISTINCT ntext trên SQL Server)
@@ -53,4 +49,8 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
         @Param("pendingStatus") OrderStatus pendingStatus,
         @Param("onlineMethods") List<PaymentMethod> onlineMethods,
         @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Order o SET o.appliedVoucher = null WHERE o.appliedVoucher.id = :voucherId")
+    int clearAppliedVoucherReferences(@Param("voucherId") Long voucherId);
 }

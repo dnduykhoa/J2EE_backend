@@ -36,4 +36,7 @@ public class OrderRequest {
 
     // Optional: cho phép checkout theo danh sách items trực tiếp (mua ngay)
     private List<OrderItemRequest> items;
+
+    // Optional: mã voucher muốn áp dụng
+    private String voucherCode;
 }
