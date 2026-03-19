@@ -53,4 +53,12 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Order o SET o.appliedVoucher = null WHERE o.appliedVoucher.id = :voucherId")
     int clearAppliedVoucherReferences(@Param("voucherId") Long voucherId);
+
+    // Đếm tổng số lượng sản phẩm cha đã bán (không gồm các dòng mua theo biến thể)
+    @Query("SELECT COALESCE(SUM(oi.quantity), 0) FROM OrderItem oi WHERE oi.product.id = :productId AND oi.variant IS NULL AND oi.order.status = j2ee_backend.nhom05.model.OrderStatus.DELIVERED")
+    long countSoldQuantityByProductId(@Param("productId") Long productId);
+
+    // Đếm tổng số lượng đã bán theo biến thể (chỉ đơn DELIVERED)
+    @Query("SELECT COALESCE(SUM(oi.quantity), 0) FROM OrderItem oi WHERE oi.variant.id = :variantId AND oi.order.status = j2ee_backend.nhom05.model.OrderStatus.DELIVERED")
+    long countSoldQuantityByVariantId(@Param("variantId") Long variantId);
 }

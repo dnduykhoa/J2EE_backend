@@ -23,6 +23,7 @@ import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductVariant;
 import j2ee_backend.nhom05.model.ProductVariantValue;
 import j2ee_backend.nhom05.repository.IAttributeDefinitionRepository;
+import j2ee_backend.nhom05.repository.IOrderRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 import j2ee_backend.nhom05.repository.IProductVariantRepository;
 
@@ -34,6 +35,9 @@ public class ProductVariantService {
 
     @Autowired
     private IProductRepository productRepository;
+
+    @Autowired
+    private IOrderRepository orderRepository;
 
     @Autowired
     private IAttributeDefinitionRepository attributeDefinitionRepository;
@@ -51,10 +55,14 @@ public class ProductVariantService {
     public List<ProductVariant> getVariantsByProduct(Long productId, boolean onlyActive) {
         productRepository.findById(productId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm với ID: " + productId));
+        List<ProductVariant> variants;
         if (onlyActive) {
-            return productVariantRepository.findByProductIdAndIsActiveTrueOrderByDisplayOrderAsc(productId);
+            variants = productVariantRepository.findByProductIdAndIsActiveTrueOrderByDisplayOrderAsc(productId);
+        } else {
+            variants = productVariantRepository.findByProductIdOrderByDisplayOrderAsc(productId);
         }
-        return productVariantRepository.findByProductIdOrderByDisplayOrderAsc(productId);
+        variants.forEach(v -> v.setSoldCount(orderRepository.countSoldQuantityByVariantId(v.getId())));
+        return variants;
     }
 
     @Transactional(readOnly = true)
