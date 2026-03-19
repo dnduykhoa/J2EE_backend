@@ -156,11 +156,13 @@ public class CartService {
             throw new RuntimeException("Không có quyền chỉnh sửa giỏ hàng này");
         }
 
-        Cart cart = cartItem.getCart();
-        cart.getItems().removeIf(item -> item.getId().equals(cartItemId)); // safe by ID
-        cartRepository.save(cart); // orphanRemoval deletes from cart_items
+        Long cartId = cartItem.getCart().getId();
+        cartItemRepository.delete(cartItem);
 
-        return buildCartResponse(cart);
+        Cart persistedCart = cartRepository.findById(cartId)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy giỏ hàng"));
+
+        return buildCartResponse(persistedCart);
     }
 
     // Xóa toàn bộ giỏ hàng
@@ -223,11 +225,12 @@ public class CartService {
         // Tải lại giỏ hàng mới nhất từ DB để đồng bộ trạng thái
         cart = cartRepository.findById(cart.getId())
             .orElseThrow(() -> new RuntimeException("Không tìm thấy giỏ hàng"));
+        List<CartItem> cartItems = cartItemRepository.findAllByCartId(cart.getId());
 
         List<CartItemResponse> itemResponses = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
 
-        for (CartItem item : cart.getItems()) {
+        for (CartItem item : cartItems) {
             Product product = item.getProduct();
             ProductVariant variant = item.getVariant();
             boolean preorder = isPreorderItem(product, variant);
