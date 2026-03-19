@@ -25,9 +25,15 @@ public class CartResponse {
     public static class CartItemResponse {
         private Long id;
         private Product product;
+        private String productName;
+        private String productImageUrl;
         private Long variantId;
         private String variantSku;
+        private String variantName;
+        private String variantDisplayName;
         private String variantImageUrl;
+        private String displayImageUrl;
+        private String imageUrl;
         private List<String> variantOptions;
         private Integer quantity;
         private BigDecimal unitPrice;
