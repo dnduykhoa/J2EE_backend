@@ -26,8 +26,10 @@ import j2ee_backend.nhom05.model.OrderStatus;
 import j2ee_backend.nhom05.model.PaymentMethod;
 import j2ee_backend.nhom05.model.Product;
 import j2ee_backend.nhom05.model.ProductMedia;
+import j2ee_backend.nhom05.model.ProductSpecification;
 import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.model.ProductVariant;
+import j2ee_backend.nhom05.model.ProductVariantValue;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.model.Voucher;
 import j2ee_backend.nhom05.repository.ICartRepository;
@@ -742,6 +744,91 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    private String normalizeAttrKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        String trimmed = key.trim().toLowerCase();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private List<String> buildParentVariantOptions(Product product) {
+        if (product == null || product.getVariants() == null || product.getVariants().isEmpty()) {
+            return null;
+        }
+
+        Set<Long> variantDefIds = new HashSet<>();
+        Set<String> variantAttrKeys = new HashSet<>();
+
+        for (ProductVariant productVariant : product.getVariants()) {
+            List<ProductVariantValue> values = productVariant.getValues();
+            if (values == null || values.isEmpty()) {
+                continue;
+            }
+
+            for (ProductVariantValue value : values) {
+                if (value.getAttributeDefinition() != null && value.getAttributeDefinition().getId() != null) {
+                    variantDefIds.add(value.getAttributeDefinition().getId());
+                }
+
+                String fromValueAttrKey = normalizeAttrKey(value.getAttrKey());
+                if (fromValueAttrKey != null) {
+                    variantAttrKeys.add(fromValueAttrKey);
+                }
+
+                String fromDefAttrKey = value.getAttributeDefinition() != null
+                        ? normalizeAttrKey(value.getAttributeDefinition().getAttrKey())
+                        : null;
+                if (fromDefAttrKey != null) {
+                    variantAttrKeys.add(fromDefAttrKey);
+                }
+            }
+        }
+
+        if (variantDefIds.isEmpty() && variantAttrKeys.isEmpty()) {
+            return null;
+        }
+
+        List<ProductSpecification> specifications = product.getSpecifications();
+        if (specifications == null || specifications.isEmpty()) {
+            return null;
+        }
+
+        List<String> parentOptions = new ArrayList<>();
+
+        for (ProductSpecification spec : specifications) {
+            Long specDefId = spec.getAttributeDefinition() != null ? spec.getAttributeDefinition().getId() : null;
+            String specAttrKey = spec.getAttributeDefinition() != null
+                    ? normalizeAttrKey(spec.getAttributeDefinition().getAttrKey())
+                    : null;
+            String specKey = normalizeAttrKey(spec.getSpecKey());
+
+            boolean isVariantDimension = (specDefId != null && variantDefIds.contains(specDefId))
+                    || (specAttrKey != null && variantAttrKeys.contains(specAttrKey))
+                    || (specKey != null && variantAttrKeys.contains(specKey));
+
+            if (!isVariantDimension) {
+                continue;
+            }
+
+            String label = spec.getAttributeDefinition() != null && spec.getAttributeDefinition().getName() != null
+                    ? spec.getAttributeDefinition().getName().trim()
+                    : (spec.getSpecKey() != null ? spec.getSpecKey().trim() : "");
+            String displayValue = spec.getDisplayValue() != null ? spec.getDisplayValue().trim() : "";
+
+            if (label.isBlank() || displayValue.isBlank()) {
+                continue;
+            }
+
+            String option = label + ": " + displayValue;
+            if (!parentOptions.contains(option)) {
+                parentOptions.add(option);
+            }
+        }
+
+        return parentOptions.isEmpty() ? null : parentOptions;
+    }
+
     private String resolveVariantDisplayName(ProductVariant variant, List<String> variantOptions) {
         if (variant == null) {
             return null;
@@ -766,7 +853,14 @@ public class OrderService {
             String variantImageUrl = resolvePrimaryImageUrl(variant != null ? variant.getMedia() : null);
             String displayImageUrl = variantImageUrl != null ? variantImageUrl : productImageUrl;
             List<String> variantOptions = buildVariantOptions(variant);
+            if ((variantOptions == null || variantOptions.isEmpty()) && variant == null) {
+                variantOptions = buildParentVariantOptions(product);
+            }
             String variantDisplayName = resolveVariantDisplayName(variant, variantOptions);
+            if ((variantDisplayName == null || variantDisplayName.isBlank())
+                    && variantOptions != null && !variantOptions.isEmpty()) {
+                variantDisplayName = String.join(" / ", variantOptions);
+            }
 
             OrderItemResponse itemResp = new OrderItemResponse();
             itemResp.setId(item.getId());
