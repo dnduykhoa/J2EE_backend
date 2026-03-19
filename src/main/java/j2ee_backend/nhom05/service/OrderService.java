@@ -3,7 +3,10 @@ package j2ee_backend.nhom05.service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +33,7 @@ import j2ee_backend.nhom05.model.Voucher;
 import j2ee_backend.nhom05.repository.ICartRepository;
 import j2ee_backend.nhom05.repository.IOrderRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
+import j2ee_backend.nhom05.repository.IProductReviewRepository;
 import j2ee_backend.nhom05.repository.IProductVariantRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
 import j2ee_backend.nhom05.repository.IVoucherRepository;
@@ -55,6 +59,9 @@ public class OrderService {
 
     @Autowired
     private IVoucherRepository voucherRepository;
+
+    @Autowired
+    private IProductReviewRepository reviewRepository;
 
     @Autowired
     private EmailService emailService;
@@ -314,9 +321,20 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByUser(Long userId) {
         List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        // Batch-check reviewed order items cho các đơn DELIVERED
+        List<Long> deliveredItemIds = orders.stream()
+                .filter(o -> o.getStatus() == OrderStatus.DELIVERED)
+                .flatMap(o -> o.getItems().stream())
+                .map(OrderItem::getId)
+                .collect(Collectors.toList());
+        Set<Long> reviewedItemIds = deliveredItemIds.isEmpty()
+                ? Collections.emptySet()
+                : new HashSet<>(reviewRepository.findReviewedOrderItemIds(userId, deliveredItemIds));
+
         List<OrderResponse> result = new ArrayList<>();
         for (Order order : orders) {
-            result.add(buildOrderResponse(order));
+            result.add(buildOrderResponse(order, reviewedItemIds));
         }
         return result;
     }
@@ -330,11 +348,21 @@ public class OrderService {
         if (isAdmin) {
             order = orderRepository.findByIdWithItems(orderId)
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng"));
+            return buildOrderResponse(order);
         } else {
             order = orderRepository.findByIdAndUserId(orderId, userId)
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng hoặc bạn không có quyền xem"));
+
+            // Check reviewed status cho user
+            Set<Long> reviewedItemIds = Collections.emptySet();
+            if (order.getStatus() == OrderStatus.DELIVERED) {
+                List<Long> itemIds = order.getItems().stream()
+                        .map(OrderItem::getId)
+                        .collect(Collectors.toList());
+                reviewedItemIds = new HashSet<>(reviewRepository.findReviewedOrderItemIds(userId, itemIds));
+            }
+            return buildOrderResponse(order, reviewedItemIds);
         }
-        return buildOrderResponse(order);
     }
 
     /**
@@ -685,7 +713,7 @@ public class OrderService {
 
     // ── Build response ────────────────────────────────────────────────────────
 
-    private OrderResponse buildOrderResponse(Order order) {
+    private OrderResponse buildOrderResponse(Order order, Set<Long> reviewedItemIds) {
         List<OrderItemResponse> itemResponses = new ArrayList<>();
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
@@ -703,26 +731,44 @@ public class OrderService {
                                 .orElse(null));
             }
 
-            itemResponses.add(new OrderItemResponse(
-                    item.getId(),
-                    product.getId(),
-                    product.getName(),
-                    productImageUrl,
-                    item.getVariant() != null ? item.getVariant().getId() : null,
-                    item.getVariant() != null ? item.getVariant().getSku() : null,
-                    item.getVariant() != null
-                            ? item.getVariant().getValues().stream()
-                                    .map(v -> {
-                                        String key = v.getAttributeDefinition() != null
-                                                ? v.getAttributeDefinition().getName()
-                                                : v.getAttrKey();
-                                        return (key != null ? key : "") + ": " + v.getDisplayValue();
-                                    })
-                                    .collect(Collectors.toList())
-                            : null,
-                    item.getQuantity(),
-                    item.getUnitPrice(),
-                    item.getSubtotal()));
+            String variantImageUrl = null;
+            if (item.getVariant() != null && item.getVariant().getMedia() != null) {
+                variantImageUrl = item.getVariant().getMedia().stream()
+                        .filter(m -> Boolean.TRUE.equals(m.getIsPrimary()) && "IMAGE".equals(m.getMediaType()))
+                        .findFirst()
+                        .map(m -> m.getMediaUrl())
+                        .orElse(item.getVariant().getMedia().stream()
+                                .filter(m -> "IMAGE".equals(m.getMediaType()))
+                                .findFirst()
+                                .map(m -> m.getMediaUrl())
+                                .orElse(null));
+            }
+
+            List<String> variantOptions = item.getVariant() != null
+                    ? item.getVariant().getValues().stream()
+                            .map(v -> {
+                                String key = v.getAttributeDefinition() != null
+                                        ? v.getAttributeDefinition().getName()
+                                        : v.getAttrKey();
+                                return (key != null ? key : "") + ": " + v.getDisplayValue();
+                            })
+                            .collect(Collectors.toList())
+                    : null;
+
+            OrderItemResponse itemResp = new OrderItemResponse();
+            itemResp.setId(item.getId());
+            itemResp.setProductId(product.getId());
+            itemResp.setProductName(product.getName());
+            itemResp.setProductImageUrl(productImageUrl);
+            itemResp.setVariantId(item.getVariant() != null ? item.getVariant().getId() : null);
+            itemResp.setVariantSku(item.getVariant() != null ? item.getVariant().getSku() : null);
+            itemResp.setVariantImageUrl(variantImageUrl);
+            itemResp.setVariantOptions(variantOptions);
+            itemResp.setQuantity(item.getQuantity());
+            itemResp.setUnitPrice(item.getUnitPrice());
+            itemResp.setSubtotal(item.getSubtotal());
+            itemResp.setReviewed(reviewedItemIds.contains(item.getId()));
+            itemResponses.add(itemResp);
         }
 
         // Dùng setter thay vì all-args constructor để tránh phụ thuộc vào thứ tự field
@@ -751,5 +797,9 @@ public class OrderService {
         resp.setMomoUrl(null);    // được gán bởi controller nếu cần
         resp.setPaymentDeadline(order.getPaymentDeadline());
         return resp;
+    }
+
+    private OrderResponse buildOrderResponse(Order order) {
+        return buildOrderResponse(order, Collections.emptySet());
     }
 }

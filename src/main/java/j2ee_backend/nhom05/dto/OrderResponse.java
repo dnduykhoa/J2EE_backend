@@ -49,9 +49,11 @@ public class OrderResponse {
         private String productImageUrl; // URL ảnh đại diện sản phẩm
         private Long variantId;
         private String variantSku;
+        private String variantImageUrl; // URL ảnh của biến thể (nếu biến thể có ảnh riêng)
         private List<String> variantOptions;
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal subtotal;
+        private Boolean reviewed; // true nếu user đã đánh giá order item này
     }
 }
