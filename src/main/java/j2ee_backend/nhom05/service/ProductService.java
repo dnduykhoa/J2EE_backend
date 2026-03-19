@@ -17,6 +17,7 @@ import j2ee_backend.nhom05.model.ProductMedia;
 import j2ee_backend.nhom05.model.ProductSpecification;
 import j2ee_backend.nhom05.model.ProductStatus;
 import j2ee_backend.nhom05.repository.ICategoryRepository;
+import j2ee_backend.nhom05.repository.IOrderRepository;
 import j2ee_backend.nhom05.repository.IProductRepository;
 
 @Service
@@ -24,6 +25,9 @@ public class ProductService {
 
     @Autowired
     private IProductRepository productRepository;
+
+    @Autowired
+    private IOrderRepository orderRepository;
 
     @Autowired
     private ICategoryRepository categoryRepository;
@@ -44,7 +48,9 @@ public class ProductService {
 
     // Lấy sản phẩm theo ID
     public Optional<Product> getProductById(Long id) {
-        return productRepository.findById(id);
+        Optional<Product> opt = productRepository.findById(id);
+        opt.ifPresent(p -> p.setSoldCount(orderRepository.countSoldQuantityByProductId(id)));
+        return opt;
     }
 
     // Tạo sản phẩm mới

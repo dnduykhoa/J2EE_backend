@@ -22,6 +22,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -105,6 +106,9 @@ public class Product {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     private ProductStatus status = ProductStatus.ACTIVE;
+
+    @Transient
+    private long soldCount = 0;
 
     @JsonProperty("isActive")
     public boolean getIsActive() {

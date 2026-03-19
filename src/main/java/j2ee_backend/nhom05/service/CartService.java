@@ -241,41 +241,33 @@ public class CartService {
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
             totalAmount = totalAmount.add(subtotal);
 
-            List<String> variantOptions = variant == null ? null : variant.getValues().stream()
-                .map(v -> {
-                    String key = v.getAttributeDefinition() != null ? v.getAttributeDefinition().getName() : v.getAttrKey();
-                    String value = v.getDisplayValue();
-                    return (key != null ? key : "") + ": " + value;
-                })
-                .collect(Collectors.toList());
+            String productImageUrl = resolvePrimaryImageUrl(product != null ? product.getMedia() : null);
+            String variantImageUrl = resolvePrimaryImageUrl(variant != null ? variant.getMedia() : null);
+            String displayImageUrl = variantImageUrl != null ? variantImageUrl : productImageUrl;
+            List<String> variantOptions = buildVariantOptions(variant);
+            String variantDisplayName = resolveVariantDisplayName(variant, variantOptions);
 
-            String variantImageUrl = null;
-            if (variant != null && variant.getMedia() != null) {
-                variantImageUrl = variant.getMedia().stream()
-                    .filter(m -> "IMAGE".equals(m.getMediaType()) && Boolean.TRUE.equals(m.getIsPrimary()))
-                    .map(ProductMedia::getMediaUrl)
-                    .findFirst()
-                    .orElseGet(() -> variant.getMedia().stream()
-                        .filter(m -> "IMAGE".equals(m.getMediaType()))
-                        .map(ProductMedia::getMediaUrl)
-                        .findFirst()
-                        .orElse(null));
-            }
+            CartItemResponse responseItem = new CartItemResponse();
+            responseItem.setId(item.getId());
+            responseItem.setProduct(product);
+            responseItem.setProductName(product != null ? product.getName() : null);
+            responseItem.setProductImageUrl(productImageUrl);
+            responseItem.setVariantId(variant != null ? variant.getId() : null);
+            responseItem.setVariantSku(variant != null ? variant.getSku() : null);
+            responseItem.setVariantName(variantDisplayName);
+            responseItem.setVariantDisplayName(variantDisplayName);
+            responseItem.setVariantImageUrl(variantImageUrl);
+            responseItem.setDisplayImageUrl(displayImageUrl);
+            responseItem.setImageUrl(displayImageUrl);
+            responseItem.setVariantOptions(variantOptions);
+            responseItem.setQuantity(item.getQuantity());
+            responseItem.setUnitPrice(unitPrice);
+            responseItem.setSubtotal(subtotal);
+            responseItem.setInStock(inStock);
+            responseItem.setAvailableStock(availableStock);
+            responseItem.setPreorder(preorder);
 
-            itemResponses.add(new CartItemResponse(
-                item.getId(),
-                product,
-                variant != null ? variant.getId() : null,
-                variant != null ? variant.getSku() : null,
-                variantImageUrl,
-                variantOptions,
-                item.getQuantity(),
-                unitPrice,
-                subtotal,
-                inStock,
-                availableStock,
-                preorder
-            ));
+            itemResponses.add(responseItem);
         }
 
         return new CartResponse(
@@ -329,5 +321,47 @@ public class CartService {
             return isVariantPreorderable(variant);
         }
         return isParentProductPreorderable(product);
+    }
+
+    private List<String> buildVariantOptions(ProductVariant variant) {
+        if (variant == null || variant.getValues() == null) {
+            return null;
+        }
+        return variant.getValues().stream()
+            .map(v -> {
+                String key = v.getAttributeDefinition() != null ? v.getAttributeDefinition().getName() : v.getAttrKey();
+                String value = v.getDisplayValue();
+                return (key != null ? key : "") + ": " + value;
+            })
+            .collect(Collectors.toList());
+    }
+
+    private String resolveVariantDisplayName(ProductVariant variant, List<String> variantOptions) {
+        if (variant == null) {
+            return null;
+        }
+        String sku = variant.getSku();
+        if (sku != null && !sku.isBlank()) {
+            return sku.trim();
+        }
+        if (variantOptions != null && !variantOptions.isEmpty()) {
+            return String.join(" / ", variantOptions);
+        }
+        return null;
+    }
+
+    private String resolvePrimaryImageUrl(List<ProductMedia> mediaList) {
+        if (mediaList == null || mediaList.isEmpty()) {
+            return null;
+        }
+        return mediaList.stream()
+            .filter(m -> "IMAGE".equals(m.getMediaType()) && Boolean.TRUE.equals(m.getIsPrimary()))
+            .map(ProductMedia::getMediaUrl)
+            .findFirst()
+            .orElseGet(() -> mediaList.stream()
+                .filter(m -> "IMAGE".equals(m.getMediaType()))
+                .map(ProductMedia::getMediaUrl)
+                .findFirst()
+                .orElse(null));
     }
 }
