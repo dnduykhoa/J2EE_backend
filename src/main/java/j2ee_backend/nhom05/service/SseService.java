@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.springframework.http.MediaType;
@@ -13,14 +14,21 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 public class SseService {
 
-    private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final List<SseEmitter> broadcastEmitters = new CopyOnWriteArrayList<>();
+    private final Map<Long, List<SseEmitter>> userEmitters = new ConcurrentHashMap<>();
 
-    public SseEmitter subscribe() {
+    public SseEmitter subscribe(Long userId) {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
-        emitters.add(emitter);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(e -> emitters.remove(emitter));
+
+        if (userId == null) {
+            broadcastEmitters.add(emitter);
+        } else {
+            userEmitters.computeIfAbsent(userId, key -> new CopyOnWriteArrayList<>()).add(emitter);
+        }
+
+        emitter.onCompletion(() -> removeEmitter(emitter, userId));
+        emitter.onTimeout(() -> removeEmitter(emitter, userId));
+        emitter.onError(e -> removeEmitter(emitter, userId));
         return emitter;
     }
 
@@ -43,8 +51,14 @@ public class SseService {
         sendToAll("variant-update", data);
     }
 
-    private void sendToAll(String eventName, Object data) {
+    public void sendToUser(Long userId, String eventName, Object data) {
+        if (userId == null) {
+            return;
+        }
+
+        List<SseEmitter> emitters = userEmitters.getOrDefault(userId, List.of());
         List<SseEmitter> dead = new ArrayList<>();
+
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event()
@@ -54,6 +68,59 @@ public class SseService {
                 dead.add(emitter);
             }
         }
+
         emitters.removeAll(dead);
+        if (emitters.isEmpty()) {
+            userEmitters.remove(userId);
+        }
+    }
+
+    private void sendToAll(String eventName, Object data) {
+        List<SseEmitter> dead = new ArrayList<>();
+
+        List<SseEmitter> allEmitters = new ArrayList<>(broadcastEmitters);
+        for (List<SseEmitter> userList : userEmitters.values()) {
+            allEmitters.addAll(userList);
+        }
+
+        for (SseEmitter emitter : allEmitters) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name(eventName)
+                        .data(data, MediaType.APPLICATION_JSON));
+            } catch (Exception e) {
+                dead.add(emitter);
+            }
+        }
+
+        for (SseEmitter emitter : dead) {
+            removeEmitterFromAll(emitter);
+        }
+    }
+
+    private void removeEmitter(SseEmitter emitter, Long userId) {
+        if (userId == null) {
+            broadcastEmitters.remove(emitter);
+            return;
+        }
+
+        List<SseEmitter> emitters = userEmitters.get(userId);
+        if (emitters != null) {
+            emitters.remove(emitter);
+            if (emitters.isEmpty()) {
+                userEmitters.remove(userId);
+            }
+        }
+    }
+
+    private void removeEmitterFromAll(SseEmitter emitter) {
+        broadcastEmitters.remove(emitter);
+        for (Map.Entry<Long, List<SseEmitter>> entry : userEmitters.entrySet()) {
+            List<SseEmitter> emitters = entry.getValue();
+            emitters.remove(emitter);
+            if (emitters.isEmpty()) {
+                userEmitters.remove(entry.getKey());
+            }
+        }
     }
 }

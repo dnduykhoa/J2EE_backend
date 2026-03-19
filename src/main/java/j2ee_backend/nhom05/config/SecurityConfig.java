@@ -130,6 +130,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/orders").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/admin/preorders").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/admin/product-questions").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.PATCH, "/api/admin/product-questions/*/answer").hasAnyAuthority("STAFF", "ROLE_STAFF")
 
                 .requestMatchers(HttpMethod.GET, "/api/users", "/api/users/search")
                     .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
@@ -139,6 +141,9 @@ public class SecurityConfig {
                     .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
 
                 .requestMatchers(HttpMethod.POST, "/api/vouchers/validate").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/products/*/questions").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/notifications/**").authenticated()
+                .requestMatchers(HttpMethod.PATCH, "/api/notifications/**").authenticated()
 
                 .requestMatchers(HttpMethod.GET,
                     "/api/products/**",
