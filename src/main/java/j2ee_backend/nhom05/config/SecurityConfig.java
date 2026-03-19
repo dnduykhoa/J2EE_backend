@@ -5,9 +5,10 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -61,10 +62,24 @@ public class SecurityConfig {
                     "/api/attribute-groups/**",
                     "/api/attribute-definitions/**",
                     "/api/category-attributes/**",
+                    "/api/sale-programs/active",
+                    "/api/sale-programs/*",
+                    "/api/vouchers/active",
                     "/api/cart/**",
                     "/api/sse/**",
                     "/images/**"
                 ).permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/vouchers/validate").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/sale-programs", "/api/vouchers", "/api/vouchers/**")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/sale-programs", "/api/vouchers")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/sale-programs/**", "/api/vouchers/**")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/sale-programs/**", "/api/vouchers/**")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/sale-programs/**", "/api/vouchers/**")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
                 // /api/orders/** yêu cầu xác thực JWT
                 .requestMatchers("/api/orders", "/api/orders/**").authenticated()
                 // /api/users/** yêu cầu xác thực JWT

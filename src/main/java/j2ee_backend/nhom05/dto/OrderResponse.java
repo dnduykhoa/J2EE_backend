@@ -33,6 +33,12 @@ public class OrderResponse {
     private String momoUrl;   // Chỉ có giá trị khi paymentMethod = MOMO
     private LocalDateTime paymentDeadline; // Deadline thanh toán (chỉ có khi VNPAY/MOMO chờ thanh toán)
 
+    // Thông tin giảm giá
+    private BigDecimal originalAmount;      // Tổng tiền gốc trước khi giảm
+    private BigDecimal saleDiscount;        // Số tiền giảm từ sale program
+    private BigDecimal voucherDiscount;     // Số tiền giảm từ voucher
+    private String appliedVoucherCode;      // Mã voucher đã áp dụng
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
