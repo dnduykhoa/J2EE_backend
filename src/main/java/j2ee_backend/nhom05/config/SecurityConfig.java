@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,38 +52,112 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/api/auth/**",
-                    "/api/preorders",
-                    "/api/products/**",
-                    "/api/categories/**",
-                    "/api/brands/**",
-                    "/api/carousel/**",
                     "/api/vnpay/**",
                     "/api/momo/**",
-                    "/api/attribute-groups/**",
-                    "/api/attribute-definitions/**",
-                    "/api/category-attributes/**",
-                    "/api/sale-programs/active",
-                    "/api/sale-programs/*",
-                    "/api/vouchers/active",
-                    "/api/cart/**",
                     "/api/sse/**",
                     "/images/**"
                 ).permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/preorders").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/carousel").permitAll()
+
+                .requestMatchers(HttpMethod.POST,
+                    "/api/products/add",
+                    "/api/products/*/media/upload",
+                    "/api/products/*/variants/add",
+                    "/api/products/*/variants/*/media/upload",
+                    "/api/products/*/specifications/add"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.PUT,
+                    "/api/products/update/*",
+                    "/api/products/*/media/*/set-primary",
+                    "/api/products/*/variants/update/*",
+                    "/api/products/*/variants/*/media/*/set-primary",
+                    "/api/products/*/specifications/update/*"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.PATCH,
+                    "/api/products/*/toggle-active",
+                    "/api/products/*/out-of-stock",
+                    "/api/products/*/new-arrival",
+                    "/api/products/*/restore"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.DELETE,
+                    "/api/products/delete/*",
+                    "/api/products/*/media/*",
+                    "/api/products/*/variants/delete/*",
+                    "/api/products/*/variants/*/media/*",
+                    "/api/products/*/specifications/delete/*",
+                    "/api/products/*/specifications/clear"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+
+                .requestMatchers(HttpMethod.POST,
+                    "/api/categories/add",
+                    "/api/brands/add",
+                    "/api/attribute-groups/add",
+                    "/api/attribute-definitions/add",
+                    "/api/category-attributes/assign",
+                    "/api/carousel/upload",
+                    "/api/carousel",
+                    "/api/sale-programs",
+                    "/api/vouchers"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.PUT,
+                    "/api/categories/update/*",
+                    "/api/brands/update/*",
+                    "/api/attribute-groups/update/*",
+                    "/api/attribute-definitions/update/*",
+                    "/api/category-attributes/update/*",
+                    "/api/carousel/*",
+                    "/api/sale-programs/*",
+                    "/api/vouchers/*"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.PATCH,
+                    "/api/sale-programs/*",
+                    "/api/vouchers/*"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.DELETE,
+                    "/api/categories/delete/*",
+                    "/api/brands/delete/*",
+                    "/api/attribute-groups/delete/*",
+                    "/api/attribute-definitions/delete/*",
+                    "/api/category-attributes/remove",
+                    "/api/category-attributes/remove/*",
+                    "/api/carousel/*",
+                    "/api/sale-programs/*",
+                    "/api/vouchers/*",
+                    "/api/vouchers/delete/*"
+                ).hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+
+                .requestMatchers(HttpMethod.GET, "/api/orders").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/admin/preorders").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+
+                .requestMatchers(HttpMethod.GET, "/api/users", "/api/users/search")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.PUT, "/api/users/*/roles")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+                .requestMatchers(HttpMethod.DELETE, "/api/users/*")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+
                 .requestMatchers(HttpMethod.POST, "/api/vouchers/validate").authenticated()
-                .requestMatchers(HttpMethod.GET, "/api/sale-programs", "/api/vouchers", "/api/vouchers/**")
-                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/sale-programs", "/api/vouchers")
-                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/sale-programs/**", "/api/vouchers/**")
-                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
-                .requestMatchers(HttpMethod.PATCH, "/api/sale-programs/**", "/api/vouchers/**")
-                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/sale-programs/**", "/api/vouchers/**")
-                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN")
-                // /api/orders/** yêu cầu xác thực JWT
+
+                .requestMatchers(HttpMethod.GET,
+                    "/api/products/**",
+                    "/api/categories/**",
+                    "/api/brands/**",
+                    "/api/attribute-groups/**",
+                    "/api/attribute-definitions/**",
+                    "/api/category-attributes/**",
+                    "/api/vouchers/active",
+                    "/api/sale-programs/active",
+                    "/api/sale-programs/*"
+                ).permitAll()
+
+                .requestMatchers(HttpMethod.GET, "/api/carousel/all", "/api/vouchers", "/api/vouchers/*", "/api/sale-programs")
+                    .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
+
                 .requestMatchers("/api/orders", "/api/orders/**").authenticated()
-                // /api/users/** yêu cầu xác thực JWT
                 .requestMatchers("/api/users", "/api/users/**").authenticated()
+                .requestMatchers("/api/cart", "/api/cart/**").authenticated()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

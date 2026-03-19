@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import j2ee_backend.nhom05.config.RoleAccess;
 import j2ee_backend.nhom05.dto.ApiResponse;
 import j2ee_backend.nhom05.service.PreorderRequestService;
 
@@ -23,9 +24,7 @@ public class AdminPreorderRequestController {
 
     @GetMapping
     public ResponseEntity<?> getAll(@AuthenticationPrincipal UserDetails userDetails) {
-        boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
-        if (!isAdmin) {
+        if (!RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
         }

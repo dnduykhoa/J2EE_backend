@@ -1,5 +1,23 @@
 package j2ee_backend.nhom05.controller;
 
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import j2ee_backend.nhom05.config.RoleAccess;
 import j2ee_backend.nhom05.dto.ApiResponse;
 import j2ee_backend.nhom05.dto.OrderRequest;
 import j2ee_backend.nhom05.dto.OrderResponse;
@@ -7,18 +25,8 @@ import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.service.MomoService;
 import j2ee_backend.nhom05.service.OrderService;
 import j2ee_backend.nhom05.service.VnpayService;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -35,12 +43,18 @@ public class OrderController {
     private MomoService momoService;
 
     // ── POST /api/orders ──────────────────────────────────────────────────────
-    // Tạo đơn hàng từ giỏ hàng (yêu cầu đăng nhập)
+    // Tạo đơn hàng từ giỏ hàng (yêu cầu đăng nhập) - CUSTOMER ONLY
     @PostMapping
     public ResponseEntity<?> createOrder(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody OrderRequest request,
             HttpServletRequest httpRequest) {
+        // Check if user is backoffice (Admin/Manager/Staff cannot create orders)
+        if (RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse("Chỉ khách hàng có thể tạo đơn hàng", null));
+        }
+
         try {
             Long userId = ((User) userDetails).getId();
             OrderResponse order = orderService.createOrder(userId, request);
@@ -103,9 +117,8 @@ public class OrderController {
             @AuthenticationPrincipal UserDetails userDetails) {
         try {
             Long userId = ((User) userDetails).getId();
-            boolean isAdmin = userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
-            OrderResponse order = orderService.getOrderById(id, userId, isAdmin);
+            boolean canViewAll = RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF");
+            OrderResponse order = orderService.getOrderById(id, userId, canViewAll);
             return ResponseEntity.ok(new ApiResponse("Lấy thông tin đơn hàng thành công", order));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -163,13 +176,10 @@ public class OrderController {
         }
     }
 
-    // ── GET /api/orders  (ADMIN) ──────────────────────────────────────────────
-    // Admin lấy tất cả đơn hàng
+    // ── GET /api/orders  (ADMIN/MANAGER/STAFF) ──────────────────────────────
     @GetMapping
     public ResponseEntity<?> getAllOrders(@AuthenticationPrincipal UserDetails userDetails) {
-        boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
-        if (!isAdmin) {
+        if (!RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
         }
@@ -182,16 +192,13 @@ public class OrderController {
         }
     }
 
-    // ── PATCH /api/orders/{id}/status  (ADMIN) ────────────────────────────────
-    // Admin cập nhật trạng thái đơn hàng
+    // ── PATCH /api/orders/{id}/status  (ADMIN/MANAGER/STAFF) ─────────────────
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateOrderStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal UserDetails userDetails) {
-        boolean isAdmin = userDetails.getAuthorities().stream()
-            .anyMatch(a -> a.getAuthority().equals("ADMIN"));
-        if (!isAdmin) {
+        if (!RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse("Bạn không có quyền thực hiện thao tác này", null));
         }

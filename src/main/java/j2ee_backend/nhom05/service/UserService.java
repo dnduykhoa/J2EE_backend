@@ -1,16 +1,21 @@
 package j2ee_backend.nhom05.service;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import j2ee_backend.nhom05.config.RoleAccess;
 import j2ee_backend.nhom05.dto.auth.UpdateProfileRequest;
 import j2ee_backend.nhom05.model.Role;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.repository.IRoleRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
 import j2ee_backend.nhom05.validator.PhoneValidator;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 @Service
 public class UserService {
@@ -48,10 +53,45 @@ public class UserService {
 
     /** Cập nhật danh sách role cho user (admin). */
     @Transactional
-    public User updateUserRoles(Long id, Set<String> roleNames) {
+    public User updateUserRoles(Long id, Set<String> roleNames, User actor) {
+        if (actor == null) {
+            throw new RuntimeException("Không xác định được người thực hiện");
+        }
+
         User user = findById(id);
-        Set<Role> roles = new HashSet<>();
+        Set<String> actorRoles = RoleAccess.getRoles(actor);
+        boolean isAdmin = actorRoles.contains("ADMIN");
+        boolean isManager = actorRoles.contains("MANAGER");
+
+        if (!isAdmin && !isManager) {
+            throw new RuntimeException("Bạn không có quyền phân quyền");
+        }
+
+        Set<String> normalizedRoleNames = new HashSet<>();
         for (String roleName : roleNames) {
+            String normalized = RoleAccess.normalizeRole(roleName);
+            if (normalized.isBlank()) {
+                continue;
+            }
+            normalizedRoleNames.add(normalized.toUpperCase(Locale.ROOT));
+        }
+
+        if (normalizedRoleNames.isEmpty()) {
+            throw new RuntimeException("Danh sách role không hợp lệ");
+        }
+
+        if (isManager) {
+            Set<String> targetCurrentRoles = RoleAccess.getRoles(user);
+            if (targetCurrentRoles.contains("ADMIN") || targetCurrentRoles.contains("MANAGER")) {
+                throw new RuntimeException("Manager không được thay đổi role của Admin hoặc Manager");
+            }
+            if (normalizedRoleNames.contains("ADMIN") || normalizedRoleNames.contains("MANAGER")) {
+                throw new RuntimeException("Manager chỉ được phân quyền giữa USER và STAFF");
+            }
+        }
+
+        Set<Role> roles = new HashSet<>();
+        for (String roleName : normalizedRoleNames) {
             Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy role: " + roleName));
             roles.add(role);

@@ -1,5 +1,24 @@
 package j2ee_backend.nhom05.controller;
 
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import j2ee_backend.nhom05.config.RoleAccess;
 import j2ee_backend.nhom05.dto.ApiResponse;
 import j2ee_backend.nhom05.dto.VoucherRequest;
 import j2ee_backend.nhom05.dto.VoucherResponse;
@@ -7,14 +26,6 @@ import j2ee_backend.nhom05.dto.VoucherValidateRequest;
 import j2ee_backend.nhom05.dto.VoucherValidateResponse;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.service.VoucherService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/vouchers")
@@ -49,7 +60,7 @@ public class VoucherController {
 
     @GetMapping
     public ResponseEntity<?> getAll(@AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             List<VoucherResponse> list = voucherService.getAll();
             return ResponseEntity.ok(new ApiResponse("Lấy danh sách voucher thành công", list));
@@ -71,7 +82,7 @@ public class VoucherController {
     public ResponseEntity<?> getById(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             return ResponseEntity.ok(new ApiResponse("OK", voucherService.getById(id)));
         } catch (RuntimeException e) {
@@ -83,7 +94,7 @@ public class VoucherController {
     public ResponseEntity<?> create(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody VoucherRequest request) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             VoucherResponse res = voucherService.create(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse("Tạo voucher thành công", res));
@@ -97,7 +108,7 @@ public class VoucherController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody VoucherRequest request) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             return ResponseEntity.ok(new ApiResponse("Cập nhật voucher thành công", voucherService.update(id, request)));
         } catch (RuntimeException e) {
@@ -109,7 +120,7 @@ public class VoucherController {
     public ResponseEntity<?> delete(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             voucherService.delete(id);
             return ResponseEntity.ok(new ApiResponse("Xoá voucher thành công", null));
@@ -122,7 +133,7 @@ public class VoucherController {
     public ResponseEntity<?> toggle(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             return ResponseEntity.ok(new ApiResponse("Cập nhật trạng thái voucher thành công", voucherService.toggleActive(id)));
         } catch (RuntimeException e) {
@@ -132,9 +143,8 @@ public class VoucherController {
 
     // ── Helper ─────────────────────────────────────────────────────────────────
 
-    private boolean isAdmin(UserDetails userDetails) {
-        return userDetails != null && userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ADMIN") || a.getAuthority().equals("ROLE_ADMIN"));
+    private boolean isAdminOrManager(UserDetails userDetails) {
+        return RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER");
     }
 
     private ResponseEntity<ApiResponse> forbidden() {

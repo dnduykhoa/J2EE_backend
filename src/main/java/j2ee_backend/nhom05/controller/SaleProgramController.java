@@ -1,17 +1,28 @@
 package j2ee_backend.nhom05.controller;
 
-import j2ee_backend.nhom05.dto.ApiResponse;
-import j2ee_backend.nhom05.dto.SaleProgramRequest;
-import j2ee_backend.nhom05.dto.SaleProgramResponse;
-import j2ee_backend.nhom05.service.SaleProgramService;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import j2ee_backend.nhom05.config.RoleAccess;
+import j2ee_backend.nhom05.dto.ApiResponse;
+import j2ee_backend.nhom05.dto.SaleProgramRequest;
+import j2ee_backend.nhom05.dto.SaleProgramResponse;
+import j2ee_backend.nhom05.service.SaleProgramService;
 
 @RestController
 @RequestMapping("/api/sale-programs")
@@ -46,7 +57,7 @@ public class SaleProgramController {
 
     @GetMapping
     public ResponseEntity<?> getAll(@AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             return ResponseEntity.ok(new ApiResponse("OK", saleProgramService.getAll()));
         } catch (RuntimeException e) {
@@ -58,7 +69,7 @@ public class SaleProgramController {
     public ResponseEntity<?> create(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody SaleProgramRequest request) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             SaleProgramResponse res = saleProgramService.create(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse("Tạo chương trình sale thành công", res));
@@ -72,7 +83,7 @@ public class SaleProgramController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody SaleProgramRequest request) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             return ResponseEntity.ok(new ApiResponse("Cập nhật chương trình sale thành công", saleProgramService.update(id, request)));
         } catch (RuntimeException e) {
@@ -84,7 +95,7 @@ public class SaleProgramController {
     public ResponseEntity<?> delete(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             saleProgramService.delete(id);
             return ResponseEntity.ok(new ApiResponse("Xoá chương trình sale thành công", null));
@@ -97,7 +108,7 @@ public class SaleProgramController {
     public ResponseEntity<?> toggle(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
-        if (!isAdmin(userDetails)) return forbidden();
+        if (!isAdminOrManager(userDetails)) return forbidden();
         try {
             return ResponseEntity.ok(new ApiResponse("Cập nhật trạng thái thành công", saleProgramService.toggleActive(id)));
         } catch (RuntimeException e) {
@@ -107,9 +118,8 @@ public class SaleProgramController {
 
     // ── Helper ─────────────────────────────────────────────────────────────────
 
-    private boolean isAdmin(UserDetails userDetails) {
-        return userDetails != null && userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ADMIN") || a.getAuthority().equals("ROLE_ADMIN"));
+    private boolean isAdminOrManager(UserDetails userDetails) {
+        return RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER");
     }
 
     private ResponseEntity<ApiResponse> forbidden() {
