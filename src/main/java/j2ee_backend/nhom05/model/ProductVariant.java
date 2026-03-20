@@ -81,6 +81,9 @@ public class ProductVariant {
     @Transient
     private long soldCount = 0;
 
+    @Transient
+    private Product.ReviewSummary reviewSummary;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

@@ -51,6 +51,9 @@ public class Product {
     @Column(name = "description", columnDefinition = "NTEXT")
     private String description;
 
+    @Column(name = "box_contents", length = 500, columnDefinition = "NVARCHAR(500)")
+    private String boxContents; // Bộ sản phẩm gồm gì (VD: Cây lấy sim, Cáp Type C, Hộp, Sách hướng dẫn)
+
     @Column(name = "price", nullable = false, precision = 18, scale = 2)
     @NotNull(message = "Giá không được để trống")
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá phải lớn hơn 0")
@@ -110,9 +113,22 @@ public class Product {
     @Transient
     private long soldCount = 0;
 
+    @Transient
+    private ReviewSummary reviewSummary;
+
     @JsonProperty("isActive")
     public boolean getIsActive() {
         return this.status == ProductStatus.ACTIVE;
+    }
+
+    public static class ReviewSummary {
+        public final double averageRating;
+        public final long totalReviews;
+
+        public ReviewSummary(double averageRating, long totalReviews) {
+            this.averageRating = averageRating;
+            this.totalReviews = totalReviews;
+        }
     }
 
     @PrePersist

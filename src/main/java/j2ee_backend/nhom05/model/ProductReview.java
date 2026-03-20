@@ -62,6 +62,12 @@ public class ProductReview {
     @Column(name = "hidden", nullable = false)
     private boolean hidden = false;
 
+    @Column(name = "reply", columnDefinition = "NVARCHAR(MAX)")
+    private String reply;
+
+    @Column(name = "replied_at")
+    private LocalDateTime repliedAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
