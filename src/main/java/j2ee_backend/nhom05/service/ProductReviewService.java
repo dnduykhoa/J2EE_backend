@@ -125,12 +125,12 @@ public class ProductReviewService {
     }
 
     /**
-     * Lấy điểm trung bình và số lượng đánh giá của sản phẩm (chỉ tính review chưa ẩn).
+     * Lấy điểm trung bình và số lượng đánh giá của sản phẩm (chỉ tính review chưa ẩn, KHÔNG bao gồm variant).
      */
     @Transactional(readOnly = true)
     public ReviewSummary getReviewSummary(Long productId) {
         double avg = reviewRepository.findAverageRatingByProductId(productId);
-        long count = reviewRepository.countByProductIdAndHiddenFalse(productId);
+        long count = reviewRepository.countByProductIdAndVariantIsNullAndHiddenFalse(productId);
         return new ReviewSummary(avg, count);
     }
 
@@ -142,6 +142,63 @@ public class ProductReviewService {
         double avg = reviewRepository.findAverageRatingByProductIdAndVariantId(productId, variantId);
         long count = reviewRepository.countByProductIdAndVariantIdAndHiddenFalse(productId, variantId);
         return new ReviewSummary(avg, count);
+    }
+
+    /**
+     * Người dùng cập nhật đánh giá của mình.
+     */
+    @Transactional
+    public ReviewResponse updateReview(Long userId, Long reviewId, Integer rating, String comment, List<MultipartFile> images) {
+        ProductReview review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đánh giá"));
+
+        if (!review.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Bạn không có quyền sửa đánh giá này");
+        }
+
+        if (rating == null || rating < 1 || rating > 5) {
+            throw new RuntimeException("Đánh giá sao phải từ 1 đến 5");
+        }
+
+        review.setRating(rating);
+        review.setComment(comment != null ? comment.trim() : null);
+
+        // Nếu có ảnh mới thì thay thế ảnh cũ
+        if (images != null) {
+            List<MultipartFile> nonEmpty = images.stream()
+                    .filter(f -> f != null && !f.isEmpty())
+                    .collect(Collectors.toList());
+
+            if (!nonEmpty.isEmpty()) {
+                if (nonEmpty.size() > MAX_IMAGES) {
+                    throw new RuntimeException("Tối đa " + MAX_IMAGES + " ảnh mỗi đánh giá");
+                }
+                // Xóa ảnh cũ
+                if (review.getImageUrls() != null) {
+                    for (String url : review.getImageUrls()) {
+                        try {
+                            String filePath = url.startsWith("/images/") ? url.substring("/images/".length()) : url;
+                            fileStorageService.deleteFile(filePath);
+                        } catch (Exception ignored) {}
+                    }
+                }
+                // Lưu ảnh mới
+                List<String> imageUrls = new ArrayList<>();
+                for (MultipartFile image : nonEmpty) {
+                    if (image.getSize() > MAX_IMAGE_SIZE) {
+                        throw new RuntimeException("Mỗi ảnh tối đa 2MB");
+                    }
+                    if (!fileStorageService.isImageFile(image)) {
+                        throw new RuntimeException("Chỉ chấp nhận file ảnh (jpg, png, webp, ...)");
+                    }
+                    String path = fileStorageService.storeFile(image, "reviews");
+                    imageUrls.add("/images/" + path);
+                }
+                review.setImageUrls(imageUrls);
+            }
+        }
+
+        return toResponse(reviewRepository.save(review));
     }
 
     /**
@@ -178,6 +235,23 @@ public class ProductReviewService {
         reviewRepository.deleteById(id);
     }
 
+    /**
+     * [ADMIN] Trả lời một đánh giá. Nếu reply rỗng/null thì xóa phản hồi.
+     */
+    @Transactional
+    public ReviewResponse replyToReview(Long reviewId, String reply) {
+        ProductReview review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đánh giá"));
+        if (reply == null || reply.isBlank()) {
+            review.setReply(null);
+            review.setRepliedAt(null);
+        } else {
+            review.setReply(reply.trim());
+            review.setRepliedAt(java.time.LocalDateTime.now());
+        }
+        return toResponse(reviewRepository.save(review));
+    }
+
     private ReviewResponse toResponse(ProductReview review) {
         String username = review.getUser().getFullName() != null
                 ? review.getUser().getFullName()
@@ -197,7 +271,9 @@ public class ProductReviewService {
                 review.getComment(),
                 review.getImageUrls(),
                 review.isHidden(),
-                review.getCreatedAt());
+                review.getCreatedAt(),
+                review.getReply(),
+                review.getRepliedAt());
     }
 
     public static class ReviewSummary {

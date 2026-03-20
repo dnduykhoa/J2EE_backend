@@ -41,15 +41,18 @@ public class ProductService {
     @Autowired
     private PreorderRequestService preorderRequestService;
 
+    @Autowired
+    private ProductReviewService reviewService;
+
     // Lấy tất cả sản phẩm
     public List<Product> getAllProducts() {
-        return deduplicateById(productRepository.findAll());
+        return enrichProducts(deduplicateById(productRepository.findAll()));
     }
 
     // Lấy sản phẩm theo ID
     public Optional<Product> getProductById(Long id) {
         Optional<Product> opt = productRepository.findById(id);
-        opt.ifPresent(p -> p.setSoldCount(orderRepository.countSoldQuantityByProductId(id)));
+        opt.ifPresent(this::enrichProduct);
         return opt;
     }
 
@@ -191,48 +194,48 @@ public class ProductService {
 
     // Tìm kiếm sản phẩm theo tên
     public List<Product> searchProductsByName(String name) {
-        return deduplicateById(productRepository.findByNameContainingIgnoreCase(name));
+        return enrichProducts(deduplicateById(productRepository.findByNameContainingIgnoreCase(name)));
     }
 
     // Lấy sản phẩm theo danh mục
     public List<Product> getProductsByCategory(Long categoryId) {
-        return deduplicateById(productRepository.findByCategoryId(categoryId));
+        return enrichProducts(deduplicateById(productRepository.findByCategoryId(categoryId)));
     }
 
     // Lấy sản phẩm theo thương hiệu
     public List<Product> getProductsByBrand(Long brandId) {
-        return deduplicateById(productRepository.findByBrandId(brandId));
+        return enrichProducts(deduplicateById(productRepository.findByBrandId(brandId)));
     }
 
     // Lấy sản phẩm đang hoạt động (status = ACTIVE)
     public List<Product> getActiveProducts() {
-        return deduplicateById(productRepository.findByStatus(ProductStatus.ACTIVE));
+        return enrichProducts(deduplicateById(productRepository.findByStatus(ProductStatus.ACTIVE)));
     }
 
     // Lấy sản phẩm hàng sắp về (status = OUT_OF_STOCK)
     // Lấy sản phẩm hàng mới về (status = NEW_ARRIVAL)
     public List<Product> getNewArrivalProducts() {
-        return deduplicateById(productRepository.findByStatus(ProductStatus.NEW_ARRIVAL));
+        return enrichProducts(deduplicateById(productRepository.findByStatus(ProductStatus.NEW_ARRIVAL)));
     }
 
     // Lấy sản phẩm hết hàng (status = OUT_OF_STOCK)
     public List<Product> getOutOfStockProducts() {
-        return deduplicateById(productRepository.findByStatus(ProductStatus.OUT_OF_STOCK));
+        return enrichProducts(deduplicateById(productRepository.findByStatus(ProductStatus.OUT_OF_STOCK)));
     }
 
     // Lấy sản phẩm ngừng kinh doanh (status = INACTIVE)
     public List<Product> getInactiveProducts() {
-        return deduplicateById(productRepository.findByStatus(ProductStatus.INACTIVE));
+        return enrichProducts(deduplicateById(productRepository.findByStatus(ProductStatus.INACTIVE)));
     }
 
     // Lấy sản phẩm theo khoảng giá
     public List<Product> getProductsByPriceRange(BigDecimal minPrice, BigDecimal maxPrice) {
-        return deduplicateById(productRepository.findByPriceBetween(minPrice, maxPrice));
+        return enrichProducts(deduplicateById(productRepository.findByPriceBetween(minPrice, maxPrice)));
     }
 
     // Lấy sản phẩm theo danh sách nhiều categoryId
     public List<Product> getProductsByCategories(List<Long> categoryIds) {
-        return deduplicateById(productRepository.findByCategoryIdIn(categoryIds));
+        return enrichProducts(deduplicateById(productRepository.findByCategoryIdIn(categoryIds)));
     }
 
     // Lấy sản phẩm theo danh mục và tất cả danh mục con của nó
@@ -244,14 +247,14 @@ public class ProductService {
         for (Category child : children) {
             ids.add(child.getId());
         }
-        return deduplicateById(productRepository.findByCategoryIdIn(ids));
+        return enrichProducts(deduplicateById(productRepository.findByCategoryIdIn(ids)));
     }
 
     // Lọc sản phẩm theo nhiều tiêu chí kết hợp (danh mục, thương hiệu, giá, tên)
     public List<Product> filterProducts(List<Long> categoryIds, List<Long> brandIds,
             BigDecimal minPrice, BigDecimal maxPrice, String name) {
-        return deduplicateById(productRepository.findAll(
-                ProductFilterSpec.build(categoryIds, brandIds, minPrice, maxPrice, name)));
+        return enrichProducts(deduplicateById(productRepository.findAll(
+                ProductFilterSpec.build(categoryIds, brandIds, minPrice, maxPrice, name))));
     }
 
     private List<Product> deduplicateById(List<Product> products) {
@@ -304,6 +307,52 @@ public class ProductService {
         } else {
             product.setNewArrivalAt(null);
         }
+    }
+
+    private void enrichProduct(Product product) {
+        if (product == null) return;
+        
+        // Set soldCount for product
+        product.setSoldCount(orderRepository.countSoldQuantityByProductId(product.getId()));
+        
+        // Set soldCount and reviewSummary for variants
+        if (product.getVariants() != null && !product.getVariants().isEmpty()) {
+            for (var variant : product.getVariants()) {
+                variant.setSoldCount(orderRepository.countSoldQuantityByVariantId(variant.getId()));
+                
+                // Set reviewSummary cho từng variant
+                try {
+                    var variantSummary = reviewService.getReviewSummaryByVariant(product.getId(), variant.getId());
+                    variant.setReviewSummary(new Product.ReviewSummary(
+                        variantSummary.averageRating,
+                        variantSummary.totalReviews
+                    ));
+                } catch (Exception e) {
+                    variant.setReviewSummary(new Product.ReviewSummary(0.0, 0));
+                }
+            }
+        }
+        
+        // Set reviewSummary cho product (chỉ đánh giá không có variant)
+        try {
+            var summary = reviewService.getReviewSummary(product.getId());
+            product.setReviewSummary(new Product.ReviewSummary(
+                summary.averageRating,
+                summary.totalReviews
+            ));
+        } catch (Exception e) {
+            product.setReviewSummary(new Product.ReviewSummary(0.0, 0));
+        }
+    }
+
+    private List<Product> enrichProducts(List<Product> products) {
+        if (products == null || products.isEmpty()) {
+            return products;
+        }
+        for (Product product : products) {
+            enrichProduct(product);
+        }
+        return products;
     }
 
     public void expireNewArrivalProducts() {

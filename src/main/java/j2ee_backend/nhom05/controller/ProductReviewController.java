@@ -54,6 +54,29 @@ public class ProductReviewController {
         }
     }
 
+    // ── PUT /api/reviews/{id} ──────────────────────────────────────────────────
+    // Người dùng sửa đánh giá của mình
+    @PutMapping(value = "/api/reviews/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> updateReview(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestParam Integer rating,
+            @RequestParam(required = false) String comment,
+            @RequestPart(name = "images", required = false) List<MultipartFile> images) {
+        if (userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse("Vui lòng đăng nhập", null));
+        }
+        try {
+            Long userId = ((User) userDetails).getId();
+            ReviewResponse review = reviewService.updateReview(userId, id, rating, comment, images);
+            return ResponseEntity.ok(new ApiResponse("Cập nhật đánh giá thành công", review));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
     // ── GET /api/products/{productId}/reviews ──────────────────────────────────
     // Lấy danh sách đánh giá của sản phẩm (công khai)
     @GetMapping("/api/products/{productId}/reviews")
@@ -154,7 +177,26 @@ public class ProductReviewController {
                     .body(new ApiResponse(e.getMessage(), null));
         }
     }
-
+    // ── POST /api/admin/reviews/{id}/reply ────────────────────────────────────────────
+    // [ADMIN] Trả lời một đánh giá (reply rỗng = xóa phản hồi)
+    @PostMapping("/api/admin/reviews/{id}/reply")
+    public ResponseEntity<?> replyToReview(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        if (!isAdmin(userDetails)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiResponse("Không có quyền truy cập", null));
+        }
+        try {
+            String reply = body.getOrDefault("reply", "");
+            ReviewResponse updated = reviewService.replyToReview(id, reply);
+            return ResponseEntity.ok(new ApiResponse("Đã gửi phản hồi", updated));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
     private boolean isAdmin(UserDetails userDetails) {
         return userDetails != null && userDetails.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ADMIN") || a.getAuthority().equals("ROLE_ADMIN"));

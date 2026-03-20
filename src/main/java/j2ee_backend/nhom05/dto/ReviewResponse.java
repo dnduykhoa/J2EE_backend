@@ -25,4 +25,6 @@ public class ReviewResponse {
     private List<String> imageUrls;
     private boolean hidden;
     private LocalDateTime createdAt;
+    private String reply;
+    private LocalDateTime repliedAt;
 }
