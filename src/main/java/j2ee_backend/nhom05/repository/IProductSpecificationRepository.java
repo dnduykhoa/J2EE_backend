@@ -14,6 +14,8 @@ public interface IProductSpecificationRepository extends JpaRepository<ProductSp
 
     List<ProductSpecification> findByProductIdOrderByDisplayOrderAsc(Long productId);
 
+  List<ProductSpecification> findByProductIdInOrderByDisplayOrderAsc(List<Long> productIds);
+
     List<ProductSpecification> findByAttributeDefinitionId(Long attrDefId);
 
     @Modifying
