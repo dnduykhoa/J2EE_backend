@@ -20,14 +20,18 @@ public interface IProductReviewRepository extends JpaRepository<ProductReview, L
     @Query("SELECT r.orderItem.id FROM ProductReview r WHERE r.user.id = :userId AND r.orderItem.id IN :itemIds")
     List<Long> findReviewedOrderItemIds(@Param("userId") Long userId, @Param("itemIds") List<Long> itemIds);
 
-    @Query("SELECT COALESCE(AVG(r.rating), 0) FROM ProductReview r WHERE r.product.id = :productId AND r.hidden = false")
+    // Lấy điểm trung bình của sản phẩm CHA (không có variant)
+    @Query("SELECT COALESCE(AVG(r.rating), 0) FROM ProductReview r WHERE r.product.id = :productId AND r.variant IS NULL AND r.hidden = false")
     Double findAverageRatingByProductId(@Param("productId") Long productId);
 
+    // Lấy điểm trung bình của variant cụ thể
     @Query("SELECT COALESCE(AVG(r.rating), 0) FROM ProductReview r WHERE r.product.id = :productId AND r.variant.id = :variantId AND r.hidden = false")
     Double findAverageRatingByProductIdAndVariantId(@Param("productId") Long productId, @Param("variantId") Long variantId);
 
-    long countByProductIdAndHiddenFalse(Long productId);
+    // Đếm số lượng đánh giá của sản phẩm CHA (không có variant)
+    long countByProductIdAndVariantIsNullAndHiddenFalse(Long productId);
 
+    // Đếm số lượng đánh giá của variant cụ thể
     long countByProductIdAndVariantIdAndHiddenFalse(Long productId, Long variantId);
 
     @Query("SELECT r FROM ProductReview r WHERE " +

@@ -79,6 +79,7 @@ public class ProductController {
     public ResponseEntity<?> createProduct(
             @RequestParam String name,
             @RequestParam(required = false) String description,
+            @RequestParam(required = false) String boxContents,
             @RequestParam BigDecimal price,
             @RequestParam Integer stockQuantity,
             @RequestParam Long categoryId,
@@ -90,6 +91,7 @@ public class ProductController {
             Product product = new Product();
             product.setName(name);
             product.setDescription(description);
+            product.setBoxContents(boxContents);
             product.setPrice(price);
             product.setStockQuantity(stockQuantity);
             product.setStatus(status);
@@ -130,6 +132,7 @@ public class ProductController {
             @PathVariable Long id,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String description,
+            @RequestParam(required = false) String boxContents,
             @RequestParam(required = false) BigDecimal price,
             @RequestParam(required = false) Integer stockQuantity,
             @RequestParam(required = false) Long categoryId,
@@ -149,6 +152,10 @@ public class ProductController {
 
             if (description != null) {
                 existingProduct.setDescription(description);
+            }
+
+            if (boxContents != null) {
+                existingProduct.setBoxContents(boxContents);
             }
 
             if (price != null) {
