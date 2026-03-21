@@ -31,6 +31,9 @@ public interface IProductRepository extends JpaRepository<Product, Long>, JpaSpe
     // Tìm sản phẩm theo danh sách categoryId (dùng cho lọc theo cây danh mục)
     List<Product> findByCategoryIdIn(List<Long> categoryIds);
 
+    // Tìm sản phẩm cùng loại (cùng category), loại trừ sản phẩm hiện tại
+    List<Product> findByCategoryIdAndIdNot(Long categoryId, Long productId);
+
     // Tìm sản phẩm theo trạng thái
     List<Product> findByStatus(ProductStatus status);
 
