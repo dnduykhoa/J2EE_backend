@@ -132,12 +132,19 @@ public class PcBuilderService {
         }
 
         if ("gpu".equals(normalizedSlot)) {
-            double caseMaxGpuLength = context.getSpecNumber(safeSelection.getCaseId(), "max_gpu_length_mm", "gpu_max_length_mm");
+            double caseMaxGpuLength = context.getSpecNumber(
+                    safeSelection.getCaseId(),
+                    "max_gpu_length_mm", "gpu_max_length_mm", "max_gpu_length",
+                    "max_vga_length_mm", "vga_max_length_mm", "vga_max_length",
+                    "chieu_dai_vga_toi_da", "chieu_dai_gpu_toi_da", "chieu_dai_toi_da_vga");
             if (caseMaxGpuLength > 0) {
                 filters.put("max_gpu_length_mm", String.valueOf((int) caseMaxGpuLength));
                 candidates = candidates.stream()
                         .filter(product -> {
-                            double gpuLength = context.getSpecNumber(product.getId(), "gpu_length_mm", "length_mm");
+                            double gpuLength = context.getSpecNumber(
+                                    product.getId(),
+                                    "gpu_length_mm", "length_mm", "gpu_length", "card_length_mm",
+                                    "kich_thuoc", "kich_thuoc_gpu", "dimensions", "size", "chieu_dai");
                             return gpuLength <= 0 || gpuLength <= caseMaxGpuLength;
                         })
                         .collect(Collectors.toList());
@@ -224,8 +231,15 @@ public class PcBuilderService {
                     "Case có thể không hỗ trợ form factor của mainboard."));
         }
 
-        double caseMaxGpuLength = context.getSpecNumber(selection.getCaseId(), "max_gpu_length_mm", "gpu_max_length_mm");
-        double gpuLength = context.getSpecNumber(selection.getGpuId(), "gpu_length_mm", "length_mm");
+        double caseMaxGpuLength = context.getSpecNumber(
+            selection.getCaseId(),
+            "max_gpu_length_mm", "gpu_max_length_mm", "max_gpu_length",
+            "max_vga_length_mm", "vga_max_length_mm", "vga_max_length",
+            "chieu_dai_vga_toi_da", "chieu_dai_gpu_toi_da", "chieu_dai_toi_da_vga");
+        double gpuLength = context.getSpecNumber(
+            selection.getGpuId(),
+            "gpu_length_mm", "length_mm", "gpu_length", "card_length_mm",
+            "kich_thuoc", "kich_thuoc_gpu", "dimensions", "size", "chieu_dai");
         if (caseMaxGpuLength > 0 && gpuLength > 0 && gpuLength > caseMaxGpuLength) {
             warnings.add(new PcBuilderWarningDto(
                     "WARNING",
@@ -453,7 +467,7 @@ public class PcBuilderService {
                     if (specKey.isBlank()) {
                         continue;
                     }
-                    if (specKey.equals(probe) || specKey.contains(probe) || probe.contains(specKey)) {
+                    if (specKey.equals(probe) || specKey.contains(probe)) {
                         return spec;
                     }
                 }

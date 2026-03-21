@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import j2ee_backend.nhom05.dto.ApiResponse;
+import j2ee_backend.nhom05.dto.ProductComparisonResponse;
 import j2ee_backend.nhom05.model.Brand;
 import j2ee_backend.nhom05.model.Category;
 import j2ee_backend.nhom05.model.Product;
@@ -237,6 +238,32 @@ public class ProductController {
             return ResponseEntity.ok(new ApiResponse("Lấy sản phẩm theo danh mục thành công", products));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // Lấy sản phẩm cùng loại để gợi ý so sánh
+    @GetMapping("/{productId}/same-type")
+    public ResponseEntity<?> getSameTypeProducts(
+            @PathVariable Long productId,
+            @RequestParam(defaultValue = "10") Integer limit) {
+        try {
+            List<Product> products = productService.getSameTypeProducts(productId, limit);
+            return ResponseEntity.ok(new ApiResponse("Lấy danh sách sản phẩm cùng loại thành công", products));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
+    // So sánh nhiều sản phẩm cùng loại theo thông số kỹ thuật
+    @GetMapping("/compare")
+    public ResponseEntity<?> compareProducts(@RequestParam List<Long> ids) {
+        try {
+            ProductComparisonResponse comparison = productService.compareProducts(ids);
+            return ResponseEntity.ok(new ApiResponse("So sánh sản phẩm cùng loại thành công", comparison));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse(e.getMessage(), null));
         }
     }
