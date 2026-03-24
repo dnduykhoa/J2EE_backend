@@ -58,6 +58,11 @@ public class SecurityConfig {
                     "/images/**"
                 ).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/preorders").permitAll()
+                .requestMatchers(HttpMethod.POST,
+                    "/api/products/pc-builder/options",
+                    "/api/products/pc-builder/summary",
+                    "/api/products/pc-builder/checkout-preview"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/carousel").permitAll()
 
                 .requestMatchers(HttpMethod.POST,

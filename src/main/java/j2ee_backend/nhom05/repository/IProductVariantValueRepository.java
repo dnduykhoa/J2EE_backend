@@ -10,4 +10,5 @@ import j2ee_backend.nhom05.model.ProductVariantValue;
 @Repository
 public interface IProductVariantValueRepository extends JpaRepository<ProductVariantValue, Long> {
     List<ProductVariantValue> findByVariantIdOrderByDisplayOrderAsc(Long variantId);
+    List<ProductVariantValue> findByVariantIdInOrderByDisplayOrderAsc(List<Long> variantIds);
 }
