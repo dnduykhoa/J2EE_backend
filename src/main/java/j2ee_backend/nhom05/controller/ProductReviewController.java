@@ -1,10 +1,7 @@
 package j2ee_backend.nhom05.controller;
 
-import j2ee_backend.nhom05.dto.ApiResponse;
-import j2ee_backend.nhom05.dto.ReviewRequest;
-import j2ee_backend.nhom05.dto.ReviewResponse;
-import j2ee_backend.nhom05.model.User;
-import j2ee_backend.nhom05.service.ProductReviewService;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -12,11 +9,25 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
-import java.util.Map;
+import j2ee_backend.nhom05.config.RoleAccess;
+import j2ee_backend.nhom05.dto.ApiResponse;
+import j2ee_backend.nhom05.dto.ReviewRequest;
+import j2ee_backend.nhom05.dto.ReviewResponse;
+import j2ee_backend.nhom05.model.User;
+import j2ee_backend.nhom05.service.ProductReviewService;
 
 @RestController
 @CrossOrigin(origins = "*")
@@ -126,7 +137,7 @@ public class ProductReviewController {
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer rating) {
-        if (!isAdmin(userDetails)) {
+        if (!canModerateReviews(userDetails)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse("Không có quyền truy cập", null));
         }
@@ -145,7 +156,7 @@ public class ProductReviewController {
     public ResponseEntity<?> deleteReview(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long id) {
-        if (!isAdmin(userDetails)) {
+        if (!canModerateReviews(userDetails)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse("Không có quyền truy cập", null));
         }
@@ -164,7 +175,7 @@ public class ProductReviewController {
     public ResponseEntity<?> toggleHidden(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long id) {
-        if (!isAdmin(userDetails)) {
+        if (!canModerateReviews(userDetails)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse("Không có quyền truy cập", null));
         }
@@ -184,7 +195,7 @@ public class ProductReviewController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long id,
             @RequestBody Map<String, String> body) {
-        if (!isAdmin(userDetails)) {
+        if (!canModerateReviews(userDetails)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse("Không có quyền truy cập", null));
         }
@@ -197,8 +208,7 @@ public class ProductReviewController {
                     .body(new ApiResponse(e.getMessage(), null));
         }
     }
-    private boolean isAdmin(UserDetails userDetails) {
-        return userDetails != null && userDetails.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ADMIN") || a.getAuthority().equals("ROLE_ADMIN"));
+    private boolean canModerateReviews(UserDetails userDetails) {
+        return RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF");
     }
 }
