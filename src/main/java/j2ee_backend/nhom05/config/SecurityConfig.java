@@ -134,6 +134,9 @@ public class SecurityConfig {
 
                 .requestMatchers(HttpMethod.GET, "/api/orders").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/orders/my").hasAnyAuthority("USER", "ROLE_USER")
+                .requestMatchers(HttpMethod.GET, "/api/admin/trusted-devices").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
+                .requestMatchers(HttpMethod.DELETE, "/api/admin/trusted-devices/*").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/admin/preorders").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/admin/product-questions").hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.PATCH, "/api/admin/product-questions/*/answer").hasAnyAuthority("STAFF", "ROLE_STAFF")

@@ -1,27 +1,34 @@
 package j2ee_backend.nhom05.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import j2ee_backend.nhom05.dto.ApiResponse;
 import j2ee_backend.nhom05.dto.auth.ChangePasswordRequest;
 import j2ee_backend.nhom05.dto.auth.ForgotPasswordRequest;
 import j2ee_backend.nhom05.dto.auth.GoogleLoginRequest;
 import j2ee_backend.nhom05.dto.auth.LoginRequest;
 import j2ee_backend.nhom05.dto.auth.LoginResponse;
+import j2ee_backend.nhom05.dto.auth.RefreshTokenRequest;
 import j2ee_backend.nhom05.dto.auth.RegisterRequest;
 import j2ee_backend.nhom05.dto.auth.ResetPasswordRequest;
 import j2ee_backend.nhom05.dto.auth.Toggle2FARequest;
 import j2ee_backend.nhom05.dto.auth.TwoFactorResponse;
 import j2ee_backend.nhom05.dto.auth.Verify2FARequest;
-import j2ee_backend.nhom05.model.Role;
 import j2ee_backend.nhom05.model.User;
-import j2ee_backend.nhom05.config.JwtUtil;
 import j2ee_backend.nhom05.service.AuthService;
+import j2ee_backend.nhom05.service.AuthSessionService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -32,7 +39,7 @@ public class AuthController {
     private AuthService authService;
 
     @Autowired
-    private JwtUtil jwtUtil;
+    private AuthSessionService authSessionService;
     
     // API kiểm tra username đã tồn tại
     @GetMapping("/check-username/{username}")
@@ -69,21 +76,10 @@ public class AuthController {
     
     // API đăng ký
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
         try {
             User user = authService.register(request);
-            String token = jwtUtil.generateToken(user.getUsername(), false);
-            LoginResponse response = new LoginResponse(
-                "Đăng ký thành công",
-                token,
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getFullName(),
-                user.getPhone(),
-                user.getBirthDate(),
-                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
-            );
+            LoginResponse response = authSessionService.issueLoginTokens(user, false, httpRequest, "Đăng ký thành công");
             return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse("Đăng ký thành công", response));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -93,9 +89,9 @@ public class AuthController {
     
     // API đăng nhập
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         try {
-            Object result = authService.login(request);
+            Object result = authService.login(request, httpRequest);
             
             // Nếu trả về TwoFactorResponse (yêu cầu xác thực 2 bước)
             if (result instanceof TwoFactorResponse) {
@@ -104,18 +100,7 @@ public class AuthController {
             
             // Nếu trả về User (không cần xác thực 2 bước)
             User user = (User) result;
-            String token = jwtUtil.generateToken(user.getUsername(), request.isRememberMe());
-            LoginResponse response = new LoginResponse(
-                "Đăng nhập thành công",
-                token,
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getFullName(),
-                user.getPhone(),
-                user.getBirthDate(),
-                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
-            );
+            LoginResponse response = authSessionService.issueLoginTokens(user, request.isRememberMe(), httpRequest, "Đăng nhập thành công");
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -125,22 +110,11 @@ public class AuthController {
     
     // API đăng nhập bằng Google
     @PostMapping("/google")
-    public ResponseEntity<?> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+    public ResponseEntity<?> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request, HttpServletRequest httpRequest) {
         try {
             User user = authService.loginWithGoogle(request.getIdToken());
-
-            String token = jwtUtil.generateToken(user.getUsername(), false);
-            LoginResponse response = new LoginResponse(
-                "Đăng nhập Google thành công",
-                token,
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getFullName(),
-                user.getPhone(),
-                user.getBirthDate(),
-                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
-            );
+            authSessionService.validateAdminIpPolicyBeforeLogin(user, httpRequest);
+            LoginResponse response = authSessionService.issueLoginTokens(user, false, httpRequest, "Đăng nhập Google thành công");
             return ResponseEntity.ok(new ApiResponse("Đăng nhập Google thành công", response));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -150,9 +124,21 @@ public class AuthController {
 
     // API đăng xuất
     @PostMapping("/logout")
-    public ResponseEntity<?> logout() {
-        // Với JWT, logout thường được xử lý ở client bằng cách xóa token
+    public ResponseEntity<?> logout(@RequestBody(required = false) RefreshTokenRequest request) {
+        if (request != null && request.getRefreshToken() != null) {
+            authSessionService.revokeByRefreshToken(request.getRefreshToken());
+        }
         return ResponseEntity.ok(new ApiResponse("Đăng xuất thành công", null));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@Valid @RequestBody RefreshTokenRequest request, HttpServletRequest httpRequest) {
+        try {
+            LoginResponse response = authSessionService.refresh(request.getRefreshToken(), httpRequest);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse(e.getMessage(), null));
+        }
     }
     
     // API đổi mật khẩu
@@ -208,22 +194,15 @@ public class AuthController {
     
     // API xác thực mã 2FA
     @PostMapping("/verify-2fa")
-    public ResponseEntity<?> verify2FA(@Valid @RequestBody Verify2FARequest request) {
+    public ResponseEntity<?> verify2FA(@Valid @RequestBody Verify2FARequest request, HttpServletRequest httpRequest) {
         try {
             User user = authService.verify2FACode(request.getEmailOrPhone(), request.getCode());
-            
-            String token = jwtUtil.generateToken(user.getUsername(), false);
-            LoginResponse response = new LoginResponse(
-                "Xác thực 2FA thành công",
-                token,
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getFullName(),
-                user.getPhone(),
-                user.getBirthDate(),
-                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
-            );
+
+            LoginResponse response = authSessionService.issueLoginTokens(
+                user,
+                request.isRememberMe(),
+                httpRequest,
+                "Xác thực 2FA thành công");
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
