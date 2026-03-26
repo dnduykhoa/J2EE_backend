@@ -99,6 +99,10 @@ public class OrderController {
     // Lấy danh sách đơn hàng của user hiện tại
     @GetMapping("/my")
     public ResponseEntity<?> getMyOrders(@AuthenticationPrincipal UserDetails userDetails) {
+        if (RoleAccess.hasAnyRole(userDetails, "ADMIN", "MANAGER", "STAFF")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse("Trang đơn hàng chỉ dành cho khách hàng", null));
+        }
         try {
             Long userId = ((User) userDetails).getId();
             List<OrderResponse> orders = orderService.getOrdersByUser(userId);

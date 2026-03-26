@@ -1,15 +1,20 @@
 package j2ee_backend.nhom05.service;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+
 import j2ee_backend.nhom05.dto.auth.ChangePasswordRequest;
 import j2ee_backend.nhom05.dto.auth.ForgotPasswordRequest;
 import j2ee_backend.nhom05.dto.auth.GoogleTokenInfo;
@@ -22,15 +27,12 @@ import j2ee_backend.nhom05.model.Role;
 import j2ee_backend.nhom05.model.TwoFactorCode;
 import j2ee_backend.nhom05.model.User;
 import j2ee_backend.nhom05.repository.IPasswordResetTokenRepository;
+import j2ee_backend.nhom05.repository.IRoleRepository;
 import j2ee_backend.nhom05.repository.ITwoFactorCodeRepository;
 import j2ee_backend.nhom05.repository.IUserRepository;
-import j2ee_backend.nhom05.repository.IRoleRepository;
 import j2ee_backend.nhom05.validator.PasswordValidator;
 import j2ee_backend.nhom05.validator.PhoneValidator;
-import org.springframework.stereotype.Service;
-
-import java.time.LocalDateTime;
-import java.util.Random;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Service
 public class AuthService {
@@ -54,6 +56,9 @@ public class AuthService {
     
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private AuthSessionService authSessionService;
 
     @Value("${google.client-id}")
     private String googleClientId;
@@ -127,7 +132,7 @@ public class AuthService {
     }
     
     // Login user - Trả về TwoFactorResponse nếu cần xác thực 2 bước
-    public Object login(LoginRequest request) {
+    public Object login(LoginRequest request, HttpServletRequest httpRequest) {
         String input = request.getEmailOrPhone().trim();
         
         // Kiểm tra định dạng: phải là email hoặc số điện thoại
@@ -153,9 +158,13 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Mật khẩu không chính xác");
         }
+
+        authSessionService.validateAdminIpPolicyBeforeLogin(user, httpRequest);
+
+        boolean requiresTwoFactor = authSessionService.shouldRequireTwoFactor(user, httpRequest);
         
-        // Nếu user bật 2FA, gửi mã xác thực
-        if (user.isTwoFactorEnabled()) {
+        // Nếu user cần 2FA, gửi mã xác thực
+        if (requiresTwoFactor) {
             String code = generateSixDigitCode();
             
             // Xóa các mã cũ

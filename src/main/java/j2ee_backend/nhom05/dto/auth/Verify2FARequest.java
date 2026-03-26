@@ -11,4 +11,6 @@ public class Verify2FARequest {
     
     @NotBlank(message = "Mã xác thực không được để trống")
     private String code;
+
+    private boolean rememberMe = false;
 }

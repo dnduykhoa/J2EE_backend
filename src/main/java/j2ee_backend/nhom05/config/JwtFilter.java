@@ -1,10 +1,9 @@
 package j2ee_backend.nhom05.config;
 
-import j2ee_backend.nhom05.repository.IUserRepository;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,16 +12,26 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import j2ee_backend.nhom05.repository.IUserRepository;
+import j2ee_backend.nhom05.service.AuthSessionService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtFilter.class);
 
     @Autowired
     private JwtUtil jwtUtil;
 
     @Autowired
     private IUserRepository userRepository;
+
+    @Autowired
+    private AuthSessionService authSessionService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -42,6 +51,13 @@ public class JwtFilter extends OncePerRequestFilter {
         try {
             if (jwtUtil.isTokenValid(token)) {
                 String username = jwtUtil.extractUsername(token);
+                Long sessionId = jwtUtil.extractSessionId(token);
+
+                if (!authSessionService.isSessionValid(sessionId, username, request)) {
+                    log.debug("JWT session invalid. username={}, sessionId={}, path={}", username, sessionId, request.getRequestURI());
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 // Chỉ set authentication nếu chưa có
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -55,8 +71,9 @@ public class JwtFilter extends OncePerRequestFilter {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (RuntimeException ex) {
             // Token lỗi → không set authentication, để Spring Security xử lý
+            log.debug("JWT filter validation error at path {}: {}", request.getRequestURI(), ex.getMessage());
         }
 
         filterChain.doFilter(request, response);
