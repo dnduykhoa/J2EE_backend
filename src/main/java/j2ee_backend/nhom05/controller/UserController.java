@@ -9,8 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -48,7 +48,10 @@ public class UserController {
                 user.getFullName(),
                 user.getPhone(),
                 user.getBirthDate(),
-                user.getProvider(),                user.isTwoFactorEnabled(),                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+                user.getProvider(),
+                user.isTwoFactorEnabled(),
+                user.isActive(),
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
             
             return ResponseEntity.ok(new ApiResponse("Lấy thông tin profile thành công", response));
@@ -81,7 +84,10 @@ public class UserController {
                 user.getFullName(),
                 user.getPhone(),
                 user.getBirthDate(),
-                user.getProvider(),                user.isTwoFactorEnabled(),                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+                user.getProvider(),
+                user.isTwoFactorEnabled(),
+                user.isActive(),
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
             );
             
             return ResponseEntity.ok(new ApiResponse("Cập nhật profile thành công", response));
@@ -105,6 +111,7 @@ public class UserController {
                     u.getId(), u.getUsername(), u.getEmail(), u.getFullName(),
                     u.getPhone(), u.getBirthDate(), u.getProvider(),
                     u.isTwoFactorEnabled(),
+                    u.isActive(),
                     u.getRoles().stream().map(Role::getName).collect(Collectors.toSet())))
                 .toList();
             return ResponseEntity.ok(new ApiResponse("Lấy danh sách user thành công", result));
@@ -124,6 +131,7 @@ public class UserController {
                     u.getId(), u.getUsername(), u.getEmail(), u.getFullName(),
                     u.getPhone(), u.getBirthDate(), u.getProvider(),
                     u.isTwoFactorEnabled(),
+                    u.isActive(),
                     u.getRoles().stream().map(Role::getName).collect(Collectors.toSet())))
                 .toList();
             return ResponseEntity.ok(new ApiResponse("Tìm kiếm user thành công", result));
@@ -133,20 +141,30 @@ public class UserController {
         }
     }
 
-    // Xóa user theo ID (admin)
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+    // Vô hiệu hóa / kích hoạt user theo ID (admin/manager)
+    @PatchMapping("/{id}/activation")
+    public ResponseEntity<?> updateUserActivation(
+            @PathVariable Long id,
+            @RequestParam boolean active,
+            @AuthenticationPrincipal User currentUser) {
         try {
-            userService.deleteUser(id);
-            return ResponseEntity.ok(new ApiResponse("Xóa user thành công", null));
+            User user = userService.updateUserActivation(id, active, currentUser);
+            UserProfileResponse response = new UserProfileResponse(
+                user.getId(), user.getUsername(), user.getEmail(), user.getFullName(),
+                user.getPhone(), user.getBirthDate(), user.getProvider(),
+                user.isTwoFactorEnabled(),
+                user.isActive(),
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
+            String message = active ? "Kích hoạt tài khoản thành công" : "Vô hiệu hóa tài khoản thành công";
+            return ResponseEntity.ok(new ApiResponse(message, response));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse(e.getMessage(), null));
         }
     }
 
-    // Cập nhật role cho user
-    // Body: ["ADMIN", "USER"]
+    // Cập nhật role cho user (mỗi user chỉ 1 role)
+    // Body: ["ADMIN"]
     @PutMapping("/{id}/roles")
     public ResponseEntity<?> updateUserRoles(
             @PathVariable Long id,
@@ -162,6 +180,7 @@ public class UserController {
                 user.getId(), user.getUsername(), user.getEmail(), user.getFullName(),
                 user.getPhone(), user.getBirthDate(), user.getProvider(),
                 user.isTwoFactorEnabled(),
+                user.isActive(),
                 user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
             return ResponseEntity.ok(new ApiResponse("Cập nhật role thành công", response));
         } catch (RuntimeException e) {

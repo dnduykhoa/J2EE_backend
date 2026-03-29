@@ -44,11 +44,35 @@ public class UserService {
                 keyword, keyword, keyword);
     }
 
-    /** Xóa user theo ID (admin). */
+    /** Vô hiệu hóa / kích hoạt tài khoản user (admin/manager). */
     @Transactional
-    public void deleteUser(Long id) {
+    public User updateUserActivation(Long id, boolean active, User actor) {
+        if (actor == null) {
+            throw new RuntimeException("Không xác định được người thực hiện");
+        }
+
         User user = findById(id);
-        userRepository.delete(user);
+        Set<String> actorRoles = RoleAccess.getRoles(actor);
+        boolean isAdmin = actorRoles.contains("ADMIN");
+        boolean isManager = actorRoles.contains("MANAGER");
+
+        if (!isAdmin && !isManager) {
+            throw new RuntimeException("Bạn không có quyền cập nhật trạng thái tài khoản");
+        }
+
+        if (actor.getId() != null && actor.getId().equals(id) && !active) {
+            throw new RuntimeException("Bạn không thể tự vô hiệu hóa tài khoản của mình");
+        }
+
+        if (isManager) {
+            Set<String> targetCurrentRoles = RoleAccess.getRoles(user);
+            if (targetCurrentRoles.contains("ADMIN") || targetCurrentRoles.contains("MANAGER")) {
+                throw new RuntimeException("Manager không được thay đổi trạng thái tài khoản Admin hoặc Manager");
+            }
+        }
+
+        user.setActive(active);
+        return userRepository.save(user);
     }
 
     /** Cập nhật danh sách role cho user (admin). */
@@ -80,22 +104,26 @@ public class UserService {
             throw new RuntimeException("Danh sách role không hợp lệ");
         }
 
+        if (normalizedRoleNames.size() != 1) {
+            throw new RuntimeException("Mỗi tài khoản chỉ được gán đúng 1 role");
+        }
+
+        String targetRoleName = normalizedRoleNames.iterator().next();
+
         if (isManager) {
             Set<String> targetCurrentRoles = RoleAccess.getRoles(user);
             if (targetCurrentRoles.contains("ADMIN") || targetCurrentRoles.contains("MANAGER")) {
                 throw new RuntimeException("Manager không được thay đổi role của Admin hoặc Manager");
             }
-            if (normalizedRoleNames.contains("ADMIN") || normalizedRoleNames.contains("MANAGER")) {
+            if ("ADMIN".equals(targetRoleName) || "MANAGER".equals(targetRoleName)) {
                 throw new RuntimeException("Manager chỉ được phân quyền giữa USER và STAFF");
             }
         }
 
         Set<Role> roles = new HashSet<>();
-        for (String roleName : normalizedRoleNames) {
-            Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy role: " + roleName));
-            roles.add(role);
-        }
+        Role role = roleRepository.findByName(targetRoleName)
+            .orElseThrow(() -> new RuntimeException("Không tìm thấy role: " + targetRoleName));
+        roles.add(role);
         user.setRoles(roles);
         return userRepository.save(user);
     }

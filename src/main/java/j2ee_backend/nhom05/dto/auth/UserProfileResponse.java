@@ -1,10 +1,11 @@
 package j2ee_backend.nhom05.dto.auth;
 
+import java.time.LocalDate;
+import java.util.Set;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDate;
-import java.util.Set;
 
 @Data
 @AllArgsConstructor
@@ -18,5 +19,6 @@ public class UserProfileResponse {
     private LocalDate birthDate;
     private String provider;
     private boolean twoFactorEnabled;
+    private boolean active;
     private Set<String> roles;
 }

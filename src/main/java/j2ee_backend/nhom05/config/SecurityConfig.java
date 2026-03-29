@@ -145,7 +145,7 @@ public class SecurityConfig {
                     .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER", "STAFF", "ROLE_STAFF")
                 .requestMatchers(HttpMethod.PUT, "/api/users/*/roles")
                     .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
-                .requestMatchers(HttpMethod.DELETE, "/api/users/*")
+                .requestMatchers(HttpMethod.PATCH, "/api/users/*/activation")
                     .hasAnyAuthority("ADMIN", "ROLE_ADMIN", "MANAGER", "ROLE_MANAGER")
 
                 .requestMatchers(HttpMethod.POST, "/api/vouchers/validate").authenticated()

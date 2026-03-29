@@ -149,6 +149,10 @@ public class AuthService {
             .orElseGet(() -> userRepository.findByPhone(normalizedPhone)
                 .orElseThrow(() -> new RuntimeException("Email hoặc số điện thoại không tồn tại")));
 
+        if (!user.isEnabled()) {
+            throw new RuntimeException("Tài khoản đã bị vô hiệu hóa");
+        }
+
         // Kiểm tra tài khoản Google không thể đăng nhập bằng mật khẩu
         if ("google".equals(user.getProvider())) {
             throw new RuntimeException("Tài khoản này đăng nhập bằng Google, vui lòng dùng Google Sign-In");
