@@ -5,10 +5,12 @@ import j2ee_backend.nhom05.repository.ICarouselSlideRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
 @Order(10)
+@Profile("seed-carousel")
 public class CarouselDataInitializer implements CommandLineRunner {
 
     @Autowired

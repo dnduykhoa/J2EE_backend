@@ -57,11 +57,22 @@ public class AuthSessionService {
     }
 
     public String resolveDeviceId(HttpServletRequest request) {
-        String deviceId = request.getHeader("X-Device-Id");
-        if (deviceId == null || deviceId.isBlank()) {
-            throw new RuntimeException("Thiếu định danh thiết bị");
+        String deviceId = firstNonBlank(
+                request.getHeader("X-Device-Id"),
+                request.getHeader("X-Device-ID"),
+                request.getHeader("X-Device-Fingerprint"));
+
+        if (deviceId != null) {
+            return normalizeDeviceId(deviceId);
         }
-        return deviceId.trim();
+
+        // Fallback để tránh fail login/refresh khi frontend chưa gửi custom header.
+        String fallback = String.join("|",
+                normalizeDevicePart(request.getHeader("User-Agent")),
+                normalizeDevicePart(request.getHeader("Sec-CH-UA-Platform")),
+                normalizeDevicePart(request.getHeader("Accept-Language")),
+                resolveClientIp(request));
+        return normalizeDeviceId(fallback);
     }
 
     public String resolveDeviceName(HttpServletRequest request) {
@@ -310,6 +321,37 @@ public class AuthSessionService {
                 .map(Role::getName)
                 .map(role -> role.replaceFirst("^ROLE_", "").toUpperCase())
                 .anyMatch(role -> role.equals("ADMIN"));
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String normalizeDeviceId(String deviceId) {
+        String normalized = deviceId.trim();
+        if (normalized.length() > 512) {
+            return normalized.substring(0, 512);
+        }
+        return normalized;
+    }
+
+    private String normalizeDevicePart(String value) {
+        if (value == null || value.isBlank()) {
+            return "na";
+        }
+        String normalized = value.trim().replaceAll("\\s+", " ");
+        if (normalized.length() > 128) {
+            return normalized.substring(0, 128);
+        }
+        return normalized;
     }
 
         private TrustedDeviceResponse toTrustedDeviceResponse(AuthSession session) {
