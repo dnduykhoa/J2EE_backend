@@ -30,7 +30,19 @@ public class DataInitializer implements CommandLineRunner {
 	@Override
 	@Transactional
 	public void run(String... args) {
+		Role adminRole = ensureRole("ADMIN", "Quản trị viên - Có toàn quyền quản lý hệ thống");
+		ensureRole("MANAGER", "Quản lý - Quản lý sản phẩm, đơn hàng và nhân viên");
+		ensureRole("STAFF", "Nhân viên - Xử lý đơn hàng và hỗ trợ khách hàng");
 		Role userRole = ensureRole("USER", "Người dùng - Khách hàng thông thường");
+
+		ensureUser(
+			"admin",
+			"admin123",
+			"admin@techstore.com",
+			"Quản trị viên hệ thống",
+			"0999999999",
+			adminRole);
+
 		ensureUser(
 				"user",
 				"user123",

@@ -36,6 +36,17 @@ public class CategoryAttributeController {
         }
     }
 
+    @GetMapping("/schema/{categoryId}")
+    public ResponseEntity<?> getSchemaByCategory(@PathVariable Long categoryId) {
+        try {
+            return ResponseEntity.ok(new ApiResponse("Lấy schema thuộc tính theo danh mục thành công",
+                categoryAttributeService.getGroupedSchemaByCategory(categoryId)));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(e.getMessage(), null));
+        }
+    }
+
     /**
      * Gán thuộc tính vào danh mục.
      * Body: { "categoryId": 2, "attrDefId": 1, "isRequired": true, "displayOrder": 1 }
@@ -45,10 +56,11 @@ public class CategoryAttributeController {
             @RequestParam Long categoryId,
             @RequestParam Long attrDefId,
             @RequestParam(defaultValue = "false") Boolean isRequired,
-            @RequestParam(defaultValue = "0") Integer displayOrder) {
+            @RequestParam(defaultValue = "0") Integer displayOrder,
+            @RequestParam(required = false) Long groupId) {
         try {
             CategoryAttribute ca = categoryAttributeService.assignAttribute(
-                categoryId, attrDefId, isRequired, displayOrder);
+                categoryId, attrDefId, isRequired, displayOrder, groupId);
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse("Gán thuộc tính vào danh mục thành công", ca));
         } catch (Exception e) {
@@ -61,9 +73,10 @@ public class CategoryAttributeController {
     public ResponseEntity<?> update(
             @PathVariable Long id,
             @RequestParam(required = false) Boolean isRequired,
-            @RequestParam(required = false) Integer displayOrder) {
+            @RequestParam(required = false) Integer displayOrder,
+            @RequestParam(required = false) Long groupId) {
         try {
-            CategoryAttribute ca = categoryAttributeService.updateAssignment(id, isRequired, displayOrder);
+            CategoryAttribute ca = categoryAttributeService.updateAssignment(id, isRequired, displayOrder, groupId);
             return ResponseEntity.ok(new ApiResponse("Cập nhật liên kết thành công", ca));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

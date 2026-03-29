@@ -50,6 +50,13 @@ public class CategoryAttribute {
     @JsonIgnoreProperties({"categoryAttributes", "productSpecifications"})
     private AttributeDefinition attributeDefinition;
 
+    // Nhóm hiển thị theo danh mục (override). Nếu null -> fallback group của AttributeDefinition.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    @ToString.Exclude
+    @JsonIgnoreProperties({"attributeDefinitions"})
+    private AttributeGroup attributeGroup;
+
     // Thuộc tính bắt buộc với danh mục này (ghi đè is_required của AttributeDefinition)
     @Column(name = "is_required")
     private Boolean isRequired = false;
