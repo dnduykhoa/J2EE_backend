@@ -34,6 +34,7 @@ public class SchemaMigrationRunner implements ApplicationRunner {
         // vì "tên biến thể" (sku) có thể trùng nhau trong cùng 1 sản phẩm.
         dropConstraintIfExists("product_variants", "UKotrdr01rrxy6fms8yuyd06jxx");
         recreateProductStatusCheckConstraint();
+        ensureCategoryAttributeGroupOverrideSchema();
     }
 
     private void dropConstraintIfExists(String tableName, String constraintName) {
@@ -81,6 +82,46 @@ public class SchemaMigrationRunner implements ApplicationRunner {
             log.info("[SchemaMigration] Đã cập nhật CHECK constraint cho cột products.status.");
         } catch (Exception e) {
             log.warn("[SchemaMigration] Không thể cập nhật CHECK constraint products.status: {}", e.getMessage());
+        }
+    }
+
+    private void ensureCategoryAttributeGroupOverrideSchema() {
+        String sql = """
+            IF COL_LENGTH('dbo.category_attributes', 'group_id') IS NULL
+            BEGIN
+                ALTER TABLE dbo.category_attributes
+                ADD group_id BIGINT NULL;
+            END;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM sys.foreign_keys
+                WHERE name = 'FK_category_attributes_group'
+            )
+            BEGIN
+                ALTER TABLE dbo.category_attributes
+                ADD CONSTRAINT FK_category_attributes_group
+                FOREIGN KEY (group_id) REFERENCES dbo.attribute_groups(id);
+            END;
+
+            IF NOT EXISTS (
+                SELECT 1
+                FROM sys.indexes
+                WHERE name = 'IDX_category_attributes_category_group_order'
+                  AND object_id = OBJECT_ID('dbo.category_attributes')
+            )
+            BEGIN
+                CREATE INDEX IDX_category_attributes_category_group_order
+                ON dbo.category_attributes(category_id, group_id, display_order);
+            END;
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.execute();
+            log.info("[SchemaMigration] Đã đảm bảo schema category_attributes.group_id + FK + INDEX.");
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] Không thể cập nhật schema category_attributes.group_id: {}", e.getMessage());
         }
     }
 }
